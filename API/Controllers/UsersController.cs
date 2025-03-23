@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using API.Models.DTOs;
 using API.Models.Entities;
+using API.Helpers;
+using Microsoft.AspNetCore.Authorization;
 namespace API.Controllers
 {
     [Route("api/[controller]")]
@@ -17,6 +19,7 @@ namespace API.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = AppRole.Customer)]
         public IActionResult GetAllUsers()
         {
             return Ok(dbContext.Users.ToList());

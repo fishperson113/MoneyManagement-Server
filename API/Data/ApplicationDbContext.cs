@@ -1,17 +1,18 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using API.Models.Entities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 namespace API.Data
 {
-    public class ApplicationDbContext:DbContext
+    public class ApplicationDbContext:IdentityDbContext<ApplicationUser>
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
         {
         }
 
-        public DbSet<User> Users { get; set; }
-        public DbSet<Category> Categories { get; set; }
-        public DbSet<Transaction> Transactions { get; set; }
+        public DbSet<User>? Users { get; set; }
+        public DbSet<Category>? Categories { get; set; }
+        public DbSet<Transaction>? Transactions { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Category>()
@@ -22,7 +23,7 @@ namespace API.Data
 
             modelBuilder.Entity<Transaction>()
             .HasOne(t => t.User)
-            .WithMany(u=>u.Transactions)
+            .WithMany(u => u.Transactions)
             .HasForeignKey(t => t.UserID)
             .OnDelete(DeleteBehavior.Restrict);
 
