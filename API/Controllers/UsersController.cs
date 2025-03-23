@@ -38,7 +38,7 @@ namespace API.Controllers
         {
             var UserEntity = new User
             {
-                Name = addUserDTO.Name,
+                Username = addUserDTO.Name,
                 Password = addUserDTO.Password,
                 Email = addUserDTO.Email
             };
@@ -55,7 +55,7 @@ namespace API.Controllers
             {
                 return NotFound();
             }
-            user.Name = addUserDTO.Name;
+            user.Username = addUserDTO.Name;
             user.Password = addUserDTO.Password;
             user.Email = addUserDTO.Email;
             dbContext.SaveChanges();
