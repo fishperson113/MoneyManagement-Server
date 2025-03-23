@@ -1,7 +1,7 @@
 ﻿using API.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using API.Models;
+using API.Models.DTOs;
 namespace API.Controllers
 {
     [Route("api/[controller]")]
@@ -15,7 +15,7 @@ namespace API.Controllers
             accountRepository = repo;
         }
         [HttpPost("SignUp")]
-        public async Task<IActionResult> SignUpAsync(SignUpModel model)
+        public async Task<IActionResult> SignUpAsync(SignUpDTO model)
         {
             var result = await accountRepository.SignUpAsync(model);
             if (result.Succeeded)
@@ -25,7 +25,7 @@ namespace API.Controllers
             return BadRequest();
         }
         [HttpPost("SignIn")]
-        public async Task<IActionResult> SignInAsync(SignInModel model)
+        public async Task<IActionResult> SignInAsync(SignInDTO model)
         {
             var token = await accountRepository.SignInAsync(model);
             if (String.IsNullOrEmpty(token))

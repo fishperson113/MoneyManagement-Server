@@ -1,11 +1,11 @@
-﻿using API.Data;
-using API.Models;
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using API.Helpers;
+using API.Models.Entities;
+using API.Models.DTOs;
 
 
 namespace API.Repositories
@@ -27,7 +27,7 @@ namespace API.Repositories
             this.roleManager= roleManager;
         }
 
-        public async Task<string> SignInAsync(SignInModel model)
+        public async Task<string> SignInAsync(SignInDTO model)
         {
             var user = await userManager.FindByEmailAsync(model.Email);
             var passwordValid = await userManager.CheckPasswordAsync(user, model.Password);
@@ -62,7 +62,7 @@ namespace API.Repositories
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        public async Task<IdentityResult> SignUpAsync(SignUpModel model)
+        public async Task<IdentityResult> SignUpAsync(SignUpDTO model)
         {
             var user = new ApplicationUser
             {

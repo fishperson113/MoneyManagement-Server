@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using API.Repositories;
 using System.Text;
 using Microsoft.OpenApi.Models;
+using API.Models.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
