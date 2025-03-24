@@ -6,5 +6,7 @@ namespace API.Repositories
     {
         public Task<IdentityResult> SignUpAsync(SignUpDTO model);
         public Task<string> SignInAsync(SignInDTO model);
+
+        public Task<bool> ClearDatabaseAsync();
     }
 }

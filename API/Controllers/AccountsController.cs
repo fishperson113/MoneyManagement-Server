@@ -34,5 +34,15 @@ namespace API.Controllers
             }
             return Ok(token);
         }
+        [HttpDelete("ClearDatabase")]
+        public async Task<IActionResult> ClearDatabaseAsync()
+        {
+            var result = await accountRepository.ClearDatabaseAsync();
+            if (result)
+            {
+                return Ok("Database cleared successfully.");
+            }
+            return StatusCode(500, "Failed to clear database.");
+        }
     }
 }

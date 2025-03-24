@@ -1,4 +1,4 @@
-using API.Data;
+﻿using API.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -46,7 +46,10 @@ builder.Services.AddSwaggerGen(option =>
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddIdentityCore<ApplicationUser>()
+builder.Services.AddIdentityCore<ApplicationUser>(options =>
+    {
+        options.SignIn.RequireConfirmedEmail = true;
+    })
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
@@ -82,7 +85,20 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.MapIdentityApi<ApplicationUser>();
+
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/register", StringComparison.OrdinalIgnoreCase) 
+    || context.Request.Path.StartsWithSegments("/login", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        await context.Response.WriteAsync("Endpoint đăng ký đã bị vô hiệu hóa.");
+        return;
+    }
+    await next();
+});
+
+app.MapIdentityApi<ApplicationUser>().RequireAuthorization();
 
 app.UseHttpsRedirection();
 
