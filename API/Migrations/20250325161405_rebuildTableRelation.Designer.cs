@@ -4,6 +4,7 @@ using API.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250325161405_rebuildTableRelation")]
+    partial class rebuildTableRelation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -104,60 +107,15 @@ namespace API.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("CategoryID");
 
-                    b.HasIndex("Name")
-                        .HasDatabaseName("IX_Category_Name");
-
-                    b.HasIndex("Type")
-                        .HasDatabaseName("IX_Category_Type");
-
                     b.ToTable("Categories");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.RefreshToken", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreationDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("ExpiryDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("Invalidated")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("JwtId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("Used")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("API.Models.Entities.Transaction", b =>
@@ -183,14 +141,9 @@ namespace API.Migrations
 
                     b.HasKey("TransactionID");
 
-                    b.HasIndex("CategoryID")
-                        .HasDatabaseName("IX_Transaction_CategoryID");
+                    b.HasIndex("CategoryID");
 
-                    b.HasIndex("TransactionDate")
-                        .HasDatabaseName("IX_Transaction_TransactionDate");
-
-                    b.HasIndex("WalletID")
-                        .HasDatabaseName("IX_Transaction_WalletID");
+                    b.HasIndex("WalletID");
 
                     b.ToTable("Transactions");
                 });
@@ -210,15 +163,11 @@ namespace API.Migrations
 
                     b.Property<string>("WalletName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("WalletID");
 
-                    b.HasIndex("UserID")
-                        .HasDatabaseName("IX_Wallet_UserID");
-
-                    b.HasIndex("WalletName")
-                        .HasDatabaseName("IX_Wallet_WalletName");
+                    b.HasIndex("UserID");
 
                     b.ToTable("Wallets");
                 });
@@ -356,17 +305,6 @@ namespace API.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("API.Models.Entities.RefreshToken", b =>
-                {
-                    b.HasOne("API.Models.Entities.ApplicationUser", "User")
-                        .WithMany("RefreshTokens")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("API.Models.Entities.Transaction", b =>
                 {
                     b.HasOne("API.Models.Entities.Category", "Category")
@@ -450,8 +388,6 @@ namespace API.Migrations
 
             modelBuilder.Entity("API.Models.Entities.ApplicationUser", b =>
                 {
-                    b.Navigation("RefreshTokens");
-
                     b.Navigation("Wallets");
                 });
 

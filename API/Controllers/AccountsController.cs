@@ -2,6 +2,10 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using API.Models.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using API.Helpers;
+using API.Models.Entities;
+using AutoMapper;
 namespace API.Controllers
 {
     [Route("api/[controller]")]
@@ -28,13 +32,14 @@ namespace API.Controllers
         public async Task<IActionResult> SignInAsync(SignInDTO model)
         {
             var token = await accountRepository.SignInAsync(model);
-            if (String.IsNullOrEmpty(token))
+            if (String.IsNullOrEmpty(token.Token))
             {
                 return Unauthorized();
             }
-            return Ok(token);
+            return Ok(token.Token);
         }
         [HttpDelete("ClearDatabase")]
+        [Authorize(Roles = AppRole.Admin)]
         public async Task<IActionResult> ClearDatabaseAsync()
         {
             var result = await accountRepository.ClearDatabaseAsync();

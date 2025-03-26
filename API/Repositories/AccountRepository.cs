@@ -7,6 +7,8 @@ using API.Helpers;
 using API.Models.Entities;
 using API.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
+using API.Data;
+using AutoMapper;
 
 
 namespace API.Repositories
@@ -18,17 +20,23 @@ namespace API.Repositories
         private readonly IConfiguration configuration;
         private readonly RoleManager<IdentityRole> roleManager;
         private readonly ILogger<AccountRepository> logger;
+        private readonly ApplicationDbContext context;
+        private readonly IMapper mapper;
 
         public AccountRepository(UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager, 
             IConfiguration configuration, RoleManager<IdentityRole> roleManager,
-            ILogger<AccountRepository> logger)
+            ILogger<AccountRepository> logger,
+            ApplicationDbContext context,
+            IMapper mapper)
         {
             this.userManager = userManager;
             this.signInManager = signInManager;
             this.configuration = configuration;
             this.roleManager= roleManager;
             this.logger=logger;
+            this.context = context;
+            this.mapper = mapper;
         }
 
         public async Task<bool> ClearDatabaseAsync()
@@ -61,50 +69,22 @@ namespace API.Repositories
             return success;
         }
 
-        public async Task<string> SignInAsync(SignInDTO model)
+        public async Task<AuthenticationResult> SignInAsync(SignInDTO model)
         {
             var user = await userManager.FindByEmailAsync(model.Email);
             var passwordValid = await userManager.CheckPasswordAsync(user, model.Password);
 
             if (user == null || !passwordValid)
             {
-                return string.Empty;
+                return new AuthenticationResult { Errors = new[] { "Invalid login attempt" } };
             }
 
-            var authClaims = new List<Claim>
-            {
-                new Claim(ClaimTypes.Email, model.Email),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            };
-
-            var userRoles = await userManager.GetRolesAsync(user);
-            foreach (var role in userRoles)
-            {
-                authClaims.Add(new Claim(ClaimTypes.Role, role.ToString()));
-            }
-
-            var authenKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JWT:Secret"]));
-
-            var token = new JwtSecurityToken(
-                issuer: configuration["JWT:ValidIssuer"],
-                audience: configuration["JWT:ValidAudience"],
-                expires: DateTime.Now.AddMinutes(20),
-                claims: authClaims,
-                signingCredentials: new SigningCredentials(authenKey, SecurityAlgorithms.HmacSha512Signature)
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            return await GenerateJwtTokenAsync(user);
         }
 
         public async Task<IdentityResult> SignUpAsync(SignUpDTO model)
         {
-            var user = new ApplicationUser
-            {
-                FirstName = model.FirstName,
-                LastName = model.LastName,
-                Email = model.Email,
-                UserName = model.Email
-            };
+            var user = mapper.Map<ApplicationUser>(model);
 
             var result = await userManager.CreateAsync(user, model.Password);
 
@@ -129,5 +109,143 @@ namespace API.Repositories
             }
             return result;
         }
+        public async Task<AuthenticationResult> RefreshTokenAsync(RefreshTokenDTO model)
+        {
+            var validatedToken = GetPrincipalFromToken(model.Token);
+
+            if (validatedToken == null)
+            {
+                return new AuthenticationResult { Errors = new[] { "Invalid Token" } };
+            }
+
+            var expiryDateUnix = long.Parse(validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Exp).Value);
+            var expiryDateTimeUtc = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                .AddSeconds(expiryDateUnix);
+
+            if (expiryDateTimeUtc > DateTime.UtcNow)
+            {
+                return new AuthenticationResult { Errors = new[] { "This token hasn't expired yet" } };
+            }
+
+            var jti = validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
+
+            var storedRefreshToken = await context.RefreshTokens.SingleOrDefaultAsync(x => x.Token == model.RefreshToken);
+
+            if (storedRefreshToken == null)
+            {
+                return new AuthenticationResult { Errors = new[] { "This refresh token does not exist" } };
+            }
+
+            if (DateTime.UtcNow > storedRefreshToken.ExpiryDate)
+            {
+                return new AuthenticationResult { Errors = new[] { "This refresh token has expired" } };
+            }
+
+            if (storedRefreshToken.Invalidated)
+            {
+                return new AuthenticationResult { Errors = new[] { "This refresh token has been invalidated" } };
+            }
+
+            if (storedRefreshToken.Used)
+            {
+                return new AuthenticationResult { Errors = new[] { "This refresh token has been used" } };
+            }
+
+            if (storedRefreshToken.JwtId != jti)
+            {
+                return new AuthenticationResult { Errors = new[] { "This refresh token does not match this JWT" } };
+            }
+
+            storedRefreshToken.Used = true;
+            context.RefreshTokens.Update(storedRefreshToken);
+            await context.SaveChangesAsync();
+
+            var userIdClaim = validatedToken.Claims.SingleOrDefault(x => x.Type == "id");
+            if (userIdClaim == null)
+            {
+                return new AuthenticationResult { Errors = new[] { "Invalid Token" } };
+            }
+
+            var user = await userManager.FindByIdAsync(userIdClaim.Value);
+            if (user == null)
+            {
+                return new AuthenticationResult { Errors = new[] { "User not found" } };
+            }
+
+            return await GenerateJwtTokenAsync(user);
+        }
+        private ClaimsPrincipal GetPrincipalFromToken(string token)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            try
+            {
+                var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidIssuer = configuration["JWT:ValidIssuer"],
+                    ValidAudience = configuration["JWT:ValidAudience"],
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JWT:Secret"])),
+                    ValidateLifetime = false
+                }, out var validatedToken);
+
+                if (!IsJwtWithValidSecurityAlgorithm(validatedToken))
+                {
+                    return null;
+                }
+
+                return principal;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        private bool IsJwtWithValidSecurityAlgorithm(SecurityToken validatedToken)
+        {
+            return (validatedToken is JwtSecurityToken jwtSecurityToken) &&
+                   jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha512, StringComparison.InvariantCultureIgnoreCase);
+        }
+        private async Task<AuthenticationResult> GenerateJwtTokenAsync(ApplicationUser user)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(configuration["JWT:Secret"]);
+
+            var claims = new[]
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Email),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim("id", user.Id)
+            };
+
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.UtcNow.AddMinutes(15),
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha512Signature)
+            };
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            var jwtToken = tokenHandler.WriteToken(token);
+
+            var refreshToken = new RefreshToken
+            {
+                JwtId = token.Id,
+                UserId = user.Id,
+                Token = Guid.NewGuid().ToString(),
+                ExpiryDate = DateTime.UtcNow.AddMonths(6)
+            };
+
+            await context.RefreshTokens.AddAsync(refreshToken);
+            await context.SaveChangesAsync();
+
+            return new AuthenticationResult
+            {
+                Token = jwtToken,
+                RefreshToken = refreshToken.Token
+            };
+        }
     }
+
 }
