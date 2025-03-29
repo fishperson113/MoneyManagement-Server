@@ -24,7 +24,7 @@ namespace API.Controllers
             var result = await accountRepository.SignUpAsync(model);
             if (result.Succeeded)
             {
-                return Ok(result.Succeeded);
+                return Ok(result.Succeeded);                          
             }
             return BadRequest();
         }

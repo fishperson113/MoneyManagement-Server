@@ -7,8 +7,12 @@ using API.Repositories;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using API.Models.Entities;
+using System.Security.Cryptography.X509Certificates;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration.AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true);
+
 
 // Add services to the container.
 
@@ -84,6 +88,14 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var dbContext = services.GetRequiredService<ApplicationDbContext>();
+
+    dbContext.Database.Migrate();
 }
 
 app.Use(async (context, next) =>
