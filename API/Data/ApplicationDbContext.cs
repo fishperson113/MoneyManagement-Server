@@ -33,9 +33,9 @@ namespace API.Data
                 .HasIndex(c => c.Name)
                 .HasDatabaseName("IX_Category_Name");
 
-            modelBuilder.Entity<Category>()
-                .HasIndex(c => c.Type)
-                .HasDatabaseName("IX_Category_Type");
+            //modelBuilder.Entity<Category>()
+            //    .HasIndex(c => c.Type)
+            //    .HasDatabaseName("IX_Category_Type");
 
             // Indexes for Transaction
             modelBuilder.Entity<Transaction>()
