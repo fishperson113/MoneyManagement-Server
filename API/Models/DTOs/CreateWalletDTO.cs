@@ -5,9 +5,9 @@ namespace API.Models.DTOs
     public class CreateWalletDTO
     {
         [Required]
-        public string UserID { get; set; }
+        public string UserID { get; set; } = null!;
         [Required]
-        public string WalletName { get; set; }
+        public string WalletName { get; set; } = null!;
         [Required]
         public decimal Balance { get; set; }
     }

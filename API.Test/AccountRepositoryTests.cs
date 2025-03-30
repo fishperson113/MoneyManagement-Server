@@ -20,6 +20,7 @@ using API.Helpers;
 using AutoMapper;
 using Moq;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 namespace API.Test
 {
     [TestFixture]
@@ -43,7 +44,7 @@ namespace API.Test
             userManager = GetUserManager(context);
             roleManager = GetRoleManager(context);
 
-            var inMemorySettings = new Dictionary<string, string>
+            var inMemorySettings = new Dictionary<string, string?>
             {
                 {"AppSettings:BaseUrl", "http://localhost:5000"},
                 {"JWT:Secret", "8jK9pL2mN7vQ5rX8tY0uW3zA6cD9fG2hJ5kM8nP1qS4tV7wY0zB3eH6iL9oR2uT5vX8yA1dF4gJ7mN0pQ3sU6wZ9"},
@@ -109,8 +110,11 @@ namespace API.Test
 
             var result = await accountRepository.RefreshTokenAsync(refreshTokenDTO);
 
-            Assert.IsFalse(result.Errors == null || !result.Errors.Any());
-            Assert.AreEqual("Invalid Token", result.Errors.First());
+            Assert.Multiple(() =>
+            {
+                Assert.That(result.Errors, Is.Not.Null.And.Not.Empty, "Errors should not be null or empty");
+                Assert.That(result.Errors.First(), Is.EqualTo("Invalid Token"));
+            });
         }
         [Test]
         public async Task RefreshTokenAsync_ValidToken_ReturnsNewToken()
@@ -213,12 +217,16 @@ namespace API.Test
 
                 var user = userManager.FindByEmailAsync(signUpDto.Email).Result;
                 Assert.That(user, Is.Not.Null, "User should exist in the database");
-                Assert.That(user.FirstName, Is.EqualTo(signUpDto.FirstName), "FirstName should match");
-                Assert.That(user.LastName, Is.EqualTo(signUpDto.LastName), "LastName should match");
-                Assert.That(user.Email, Is.EqualTo(signUpDto.Email), "Email should match");
+                // Update the assertion to handle the possibility of null values
+                Assert.That(user?.FirstName, Is.EqualTo(signUpDto.FirstName), "FirstName should match");
+                Assert.That(user?.LastName, Is.EqualTo(signUpDto.LastName), "LastName should match");
+                Assert.That(user?.Email, Is.EqualTo(signUpDto.Email), "Email should match");
 
-                var roles = userManager.GetRolesAsync(user).Result;
-                Assert.That(roles, Contains.Item(AppRole.Customer), "User should have Customer role");
+                if (user != null)
+                {
+                    var roles = userManager.GetRolesAsync(user).Result;
+                    Assert.That(roles, Contains.Item(AppRole.Customer), "User should have Customer role");
+                }
             });
         }
 
@@ -354,7 +362,7 @@ namespace API.Test
                 new UserValidator<ApplicationUser>()
             };
 
-                    var passwordValidators = new List<IPasswordValidator<ApplicationUser>>
+            var passwordValidators = new List<IPasswordValidator<ApplicationUser>>
             {
                 new PasswordValidator<ApplicationUser>()
             };
@@ -367,7 +375,7 @@ namespace API.Test
                 passwordValidators,
                 new UpperInvariantLookupNormalizer(),
                 new IdentityErrorDescriber(),
-                null,
+                new ServiceCollection().BuildServiceProvider(), // Replace null with a valid IServiceProvider
                 NullLogger<UserManager<ApplicationUser>>.Instance
             );
         }

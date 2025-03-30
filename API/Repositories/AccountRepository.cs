@@ -72,9 +72,15 @@ namespace API.Repositories
         public async Task<AuthenticationResult> SignInAsync(SignInDTO model)
         {
             var user = await userManager.FindByEmailAsync(model.Email);
+
+            if (user == null)
+            {
+                return new AuthenticationResult { Errors = new[] { "Invalid login attempt" } };
+            }
+
             var passwordValid = await userManager.CheckPasswordAsync(user, model.Password);
 
-            if (user == null || !passwordValid)
+            if (!passwordValid)
             {
                 return new AuthenticationResult { Errors = new[] { "Invalid login attempt" } };
             }
@@ -174,18 +180,19 @@ namespace API.Repositories
 
             return await GenerateJwtTokenAsync(user);
         }
-        private ClaimsPrincipal GetPrincipalFromToken(string token)
+        private ClaimsPrincipal? GetPrincipalFromToken(string token)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             try
             {
+                var jwtSecret = configuration["JWT:Secret"] ?? throw new ArgumentNullException("JWT:Secret configuration is missing.");
                 var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
                 {
                     ValidateIssuer = true,
                     ValidateAudience = true,
                     ValidIssuer = configuration["JWT:ValidIssuer"],
                     ValidAudience = configuration["JWT:ValidAudience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JWT:Secret"])),
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
                     ValidateLifetime = false
                 }, out var validatedToken);
 
@@ -209,13 +216,14 @@ namespace API.Repositories
         private async Task<AuthenticationResult> GenerateJwtTokenAsync(ApplicationUser user)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(configuration["JWT:Secret"]);
+            var jwtSecret = configuration["JWT:Secret"] ?? throw new ArgumentNullException("JWT:Secret configuration is missing.");
+            var key = Encoding.ASCII.GetBytes(jwtSecret);
 
             var claims = new[]
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Email),
+                new Claim(JwtRegisteredClaimNames.Sub, user.Email ?? throw new ArgumentNullException(nameof(user.Email))),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email ?? throw new ArgumentNullException(nameof(user.Email))),
                 new Claim("id", user.Id)
             };
 

@@ -45,7 +45,7 @@ namespace API.Test
         public async Task CreateCategoryAsync_ShouldCreateCategory()
         {
             // Arrange
-            var createCategoryDTO = new CreateCategoryDTO { Name = "Test Category"};
+            var createCategoryDTO = new CreateCategoryDTO { Name = "Test Category" };
             var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
             var categoryDTO = new CategoryDTO { CategoryID = category.CategoryID, Name = "Test Category", CreatedAt = DateTime.UtcNow };
 
@@ -59,7 +59,7 @@ namespace API.Test
             Assert.Multiple(() =>
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
+                Assert.That(result!.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
                 Assert.That(result.Name, Is.EqualTo(categoryDTO.Name), "Name should match");
             });
         }
@@ -84,7 +84,7 @@ namespace API.Test
             Assert.Multiple(() =>
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
+                Assert.That(result!.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
                 Assert.That(result.Name, Is.EqualTo(categoryDTO.Name), "Name should match");
             });
         }
@@ -111,15 +111,15 @@ namespace API.Test
         {
             // Arrange
             var categories = new List<Category>
-            {
-                new Category { CategoryID = Guid.NewGuid(), Name = "Category 1", CreatedAt = DateTime.UtcNow },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Category 2", CreatedAt = DateTime.UtcNow }
-            };
+                    {
+                        new Category { CategoryID = Guid.NewGuid(), Name = "Category 1", CreatedAt = DateTime.UtcNow },
+                        new Category { CategoryID = Guid.NewGuid(), Name = "Category 2", CreatedAt = DateTime.UtcNow }
+                    };
             var categoryDTOs = new List<CategoryDTO>
-            {
-                new CategoryDTO { CategoryID = categories[0].CategoryID, Name = "Category 1", CreatedAt = DateTime.UtcNow },
-                new CategoryDTO { CategoryID = categories[1].CategoryID, Name = "Category 2", CreatedAt = DateTime.UtcNow }
-            };
+                    {
+                        new CategoryDTO { CategoryID = categories[0].CategoryID, Name = "Category 1", CreatedAt = DateTime.UtcNow },
+                        new CategoryDTO { CategoryID = categories[1].CategoryID, Name = "Category 2", CreatedAt = DateTime.UtcNow }
+                    };
 
             context.Categories.AddRange(categories);
             await context.SaveChangesAsync();
@@ -157,7 +157,7 @@ namespace API.Test
             Assert.Multiple(() =>
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
+                Assert.That(result!.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
                 Assert.That(result.Name, Is.EqualTo(categoryDTO.Name), "Name should match");
             });
         }
