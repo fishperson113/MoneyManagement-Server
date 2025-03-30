@@ -9,7 +9,7 @@ services:
     depends_on:
         - sqlserver
     environment:
-        - ASPNETCORE_ENVIRONMENT=Docker
+        - ASPNETCORE_ENVIRONMENT=Development
     networks:
         - productnetwork
     restart: on-failure

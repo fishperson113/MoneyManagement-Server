@@ -11,7 +11,7 @@ using System.Security.Cryptography.X509Certificates;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Configuration.AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true);
+builder.Configuration.AddJsonFile($"appsettings.json", optional: true).AddEnvironmentVariables();
 
 
 // Add services to the container.
@@ -84,7 +84,7 @@ builder.Services.AddAuthentication(options => {
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("LocalDevelopment"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
