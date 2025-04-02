@@ -9,6 +9,7 @@ using Microsoft.OpenApi.Models;
 using API.Models.Entities;
 using API.Services; 
 using System.Security.Cryptography.X509Certificates;
+using API.Helpers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,7 +54,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
     {
-        options.SignIn.RequireConfirmedEmail = true;
+        //temporary disable email confirmation
+        options.SignIn.RequireConfirmedEmail = false;
     })
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -68,6 +70,8 @@ builder.Services.AddScoped<IWalletRepository, WalletRepository>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 
 builder.Services.AddAuthentication(options =>
 {

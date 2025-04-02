@@ -504,6 +504,77 @@ namespace API.Test
                 NullLogger<UserManager<ApplicationUser>>.Instance
             );
         }
+        [Test]
+        public async Task SignInAsync_ValidCredentials_ReturnsSuccessResult()
+        {
+            // Arrange
+            var user = new ApplicationUser
+            {
+                Email = "test@example.com",
+                UserName = "test@example.com",
+                FirstName = "Test",
+                LastName = "User"
+            };
+            await userManager.CreateAsync(user, "Password123!");
+
+            var signInDto = new SignInDTO
+            {
+                Email = "test@example.com",
+                Password = "Password123!"
+            };
+
+            var mockRefreshToken = new RefreshToken
+            {
+                Token = "test-refresh-token",
+                JwtId = "test-jwt-id",
+                UserId = user.Id,
+                CreationDate = DateTime.UtcNow,
+                ExpiryDate = DateTime.UtcNow.AddDays(7),
+                Invalidated = false
+            };
+
+            // Mock the token service to simulate generating both tokens
+            tokenService.Reset();
+            tokenService.Setup(ts => ts.GenerateTokensAsync(It.IsAny<ApplicationUser>()))
+                .ReturnsAsync((ApplicationUser u) =>
+                {
+                    // Simulate creating a refresh token by adding it to the database
+                    if (context.RefreshTokens != null)
+                    {
+                        context.RefreshTokens.Add(mockRefreshToken);
+                        context.SaveChanges();
+                    }
+
+                    return new AuthenticationResult
+                    {
+                        Token = "test-access-token",
+                        Success = true
+                    };
+                });
+
+            // Act
+            var result = await accountRepository.SignInAsync(signInDto);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                // Check authentication result
+                Assert.That(result.Success, Is.True, "Authentication should succeed");
+                Assert.That(result.Token, Is.Not.Null.Or.Empty, "Access token should not be null or empty");
+
+                // Verify token service was called with the right user
+                tokenService.Verify(ts => ts.GenerateTokensAsync(
+                    It.Is<ApplicationUser>(u => u.Id == user.Id)),
+                    Times.Once);
+
+                // Check that a refresh token was actually added to the database
+                var storedToken = context.RefreshTokens?.FirstOrDefault(rt => rt.UserId == user.Id);
+                Assert.That(storedToken, Is.Not.Null, "Refresh token should be saved in the database");
+                Assert.That(storedToken?.Token, Is.EqualTo(mockRefreshToken.Token), "Stored token should match the generated token");
+                Assert.That(storedToken?.UserId, Is.EqualTo(user.Id), "Token should be associated with the correct user");
+                Assert.That(storedToken?.Invalidated, Is.False, "Token should not be invalidated");
+            });
+        }
 
         private RoleManager<IdentityRole> GetRoleManager(ApplicationDbContext context)
         {
