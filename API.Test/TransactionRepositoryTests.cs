@@ -316,12 +316,15 @@ namespace API.Test
             // Act
             var result = await transactionRepository.GetTransactionByIdAsync(transactionId);
 
-            // Assert
+            // Add null checks before dereferencing result
             Assert.Multiple(() =>
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.TransactionID, Is.EqualTo(transactionDTO.TransactionID), "TransactionID should match");
-                Assert.That(result.Amount, Is.EqualTo(transactionDTO.Amount), "Amount should match");
+                if (result != null)
+                {
+                    Assert.That(result.TransactionID, Is.EqualTo(transactionDTO.TransactionID), "TransactionID should match");
+                    Assert.That(result.Amount, Is.EqualTo(transactionDTO.Amount), "Amount should match");
+                }
             });
         }
 

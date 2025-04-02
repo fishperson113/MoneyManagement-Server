@@ -251,10 +251,17 @@ namespace API.Test
             // Assert
             Assert.Multiple(() =>
             {
-                Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.WalletID, Is.EqualTo(walletDTO.WalletID), "WalletID should match");
-                Assert.That(result.WalletName, Is.EqualTo(walletDTO.WalletName), "WalletName should match");
-                Assert.That(result.Balance, Is.EqualTo(walletDTO.Balance), "Balance should match");
+                // Update the assertion to handle the possibility of a null reference
+                Assert.Multiple(() =>
+                {
+                    Assert.That(result, Is.Not.Null, "Result should not be null");
+                    if (result != null)
+                    {
+                        Assert.That(result.WalletID, Is.EqualTo(walletDTO.WalletID), "WalletID should match");
+                        Assert.That(result.WalletName, Is.EqualTo(walletDTO.WalletName), "WalletName should match");
+                        Assert.That(result.Balance, Is.EqualTo(walletDTO.Balance), "Balance should match");
+                    }
+                });
             });
         }
     }
