@@ -49,5 +49,35 @@ namespace API.Controllers
             }
             return StatusCode(500, "Failed to clear database.");
         }
+
+        [HttpPost("RefreshToken")]
+        public async Task<IActionResult> RefreshTokenAsync(RefreshTokenDTO model)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { Success = false, Message = "Invalid model state", Errors = ModelState });
+                }
+
+                var authResult = await accountRepository.RefreshTokenAsync(model);
+
+                if (string.IsNullOrEmpty(authResult.Token))
+                {
+                    return Unauthorized(new { Success = false, Message = "Token refresh failed", Errors = authResult.Errors });
+                }
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = "Token refreshed successfully",
+                    Token = authResult.Token
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Success = false, Message = ex });
+            }
+        }
     }
 }

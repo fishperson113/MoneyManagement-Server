@@ -20,16 +20,6 @@ namespace API.Helpers
                 .ForMember(dest => dest.Wallets, opt => opt.Ignore())
                 .ForMember(dest => dest.RefreshTokens, opt => opt.Ignore());
 
-            CreateMap<RefreshTokenDTO, RefreshToken>()
-               .ForMember(dest => dest.Token, opt => opt.MapFrom(src => src.RefreshToken))
-               .ForMember(dest => dest.JwtId, opt => opt.Ignore())
-               .ForMember(dest => dest.UserId, opt => opt.Ignore())
-               .ForMember(dest => dest.User, opt => opt.Ignore())
-               .ForMember(dest => dest.Id, opt => opt.Ignore())
-               .ForMember(dest => dest.CreationDate, opt => opt.Ignore())
-               .ForMember(dest => dest.ExpiryDate, opt => opt.Ignore())
-               .ForMember(dest => dest.Used, opt => opt.Ignore())
-               .ForMember(dest => dest.Invalidated, opt => opt.Ignore());
 
             // Category Mappings
 

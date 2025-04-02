@@ -9,6 +9,7 @@ using API.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
 using API.Data;
 using AutoMapper;
+using API.Services;
 
 
 namespace API.Repositories
@@ -22,13 +23,15 @@ namespace API.Repositories
         private readonly ILogger<AccountRepository> logger;
         private readonly ApplicationDbContext context;
         private readonly IMapper mapper;
+        private readonly ITokenService service;
 
         public AccountRepository(UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager, 
             IConfiguration configuration, RoleManager<IdentityRole> roleManager,
             ILogger<AccountRepository> logger,
             ApplicationDbContext context,
-            IMapper mapper)
+            IMapper mapper,
+            ITokenService service)
         {
             this.userManager = userManager;
             this.signInManager = signInManager;
@@ -37,6 +40,7 @@ namespace API.Repositories
             this.logger=logger;
             this.context = context;
             this.mapper = mapper;
+            this.service= service;
         }
 
         public async Task<bool> ClearDatabaseAsync()
@@ -72,14 +76,28 @@ namespace API.Repositories
         public async Task<AuthenticationResult> SignInAsync(SignInDTO model)
         {
             var user = await userManager.FindByEmailAsync(model.Email);
-            var passwordValid = await userManager.CheckPasswordAsync(user, model.Password);
 
-            if (user == null || !passwordValid)
+            if (user == null)
             {
-                return new AuthenticationResult { Errors = new[] { "Invalid login attempt" } };
+                return new AuthenticationResult
+                {
+                    Errors = new[] { "User does not exist" },
+                    Success = false
+                };
             }
 
-            return await GenerateJwtTokenAsync(user);
+            var result = await signInManager.CheckPasswordSignInAsync(user, model.Password, false);
+
+            if (!result.Succeeded)
+            {
+                return new AuthenticationResult
+                {
+                    Errors = new[] { "Invalid login credentials" },
+                    Success = false
+                };
+            }
+
+            return await service.GenerateTokensAsync(user);
         }
 
         public async Task<IdentityResult> SignUpAsync(SignUpDTO model)
@@ -111,141 +129,9 @@ namespace API.Repositories
         }
         public async Task<AuthenticationResult> RefreshTokenAsync(RefreshTokenDTO model)
         {
-            var validatedToken = GetPrincipalFromToken(model.Token);
-
-            if (validatedToken == null)
-            {
-                return new AuthenticationResult { Errors = new[] { "Invalid Token" } };
-            }
-
-            var expiryDateUnix = long.Parse(validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Exp).Value);
-            var expiryDateTimeUtc = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-                .AddSeconds(expiryDateUnix);
-
-            if (expiryDateTimeUtc > DateTime.UtcNow)
-            {
-                return new AuthenticationResult { Errors = new[] { "This token hasn't expired yet" } };
-            }
-
-            var jti = validatedToken.Claims.Single(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
-
-            var storedRefreshToken = await context.RefreshTokens.SingleOrDefaultAsync(x => x.Token == model.RefreshToken);
-
-            if (storedRefreshToken == null)
-            {
-                return new AuthenticationResult { Errors = new[] { "This refresh token does not exist" } };
-            }
-
-            if (DateTime.UtcNow > storedRefreshToken.ExpiryDate)
-            {
-                return new AuthenticationResult { Errors = new[] { "This refresh token has expired" } };
-            }
-
-            if (storedRefreshToken.Invalidated)
-            {
-                return new AuthenticationResult { Errors = new[] { "This refresh token has been invalidated" } };
-            }
-
-            if (storedRefreshToken.Used)
-            {
-                return new AuthenticationResult { Errors = new[] { "This refresh token has been used" } };
-            }
-
-            if (storedRefreshToken.JwtId != jti)
-            {
-                return new AuthenticationResult { Errors = new[] { "This refresh token does not match this JWT" } };
-            }
-
-            storedRefreshToken.Used = true;
-            context.RefreshTokens.Update(storedRefreshToken);
-            await context.SaveChangesAsync();
-
-            var userIdClaim = validatedToken.Claims.SingleOrDefault(x => x.Type == "id");
-            if (userIdClaim == null)
-            {
-                return new AuthenticationResult { Errors = new[] { "Invalid Token" } };
-            }
-
-            var user = await userManager.FindByIdAsync(userIdClaim.Value);
-            if (user == null)
-            {
-                return new AuthenticationResult { Errors = new[] { "User not found" } };
-            }
-
-            return await GenerateJwtTokenAsync(user);
+            return await service.RefreshTokenAsync(model.ExpiredToken);
         }
-        private ClaimsPrincipal GetPrincipalFromToken(string token)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            try
-            {
-                var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidIssuer = configuration["JWT:ValidIssuer"],
-                    ValidAudience = configuration["JWT:ValidAudience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["JWT:Secret"])),
-                    ValidateLifetime = false
-                }, out var validatedToken);
-
-                if (!IsJwtWithValidSecurityAlgorithm(validatedToken))
-                {
-                    return null;
-                }
-
-                return principal;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-        private bool IsJwtWithValidSecurityAlgorithm(SecurityToken validatedToken)
-        {
-            return (validatedToken is JwtSecurityToken jwtSecurityToken) &&
-                   jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha512, StringComparison.InvariantCultureIgnoreCase);
-        }
-        private async Task<AuthenticationResult> GenerateJwtTokenAsync(ApplicationUser user)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(configuration["JWT:Secret"]);
-
-            var claims = new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Email),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim("id", user.Id)
-            };
-
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddMinutes(15),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha512Signature)
-            };
-
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            var jwtToken = tokenHandler.WriteToken(token);
-
-            var refreshToken = new RefreshToken
-            {
-                JwtId = token.Id,
-                UserId = user.Id,
-                Token = Guid.NewGuid().ToString(),
-                ExpiryDate = DateTime.UtcNow.AddMonths(6)
-            };
-
-            await context.RefreshTokens.AddAsync(refreshToken);
-            await context.SaveChangesAsync();
-
-            return new AuthenticationResult
-            {
-                Token = jwtToken,
-                RefreshToken = refreshToken.Token
-            };
-        }
+        
     }
 
 }

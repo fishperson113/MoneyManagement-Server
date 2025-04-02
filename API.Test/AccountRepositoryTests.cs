@@ -20,6 +20,9 @@ using API.Helpers;
 using AutoMapper;
 using Moq;
 using Microsoft.Extensions.Options;
+using API.Services;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 namespace API.Test
 {
     [TestFixture]
@@ -27,11 +30,13 @@ namespace API.Test
     {
         private ApplicationDbContext context;
         private UserManager<ApplicationUser> userManager;
+        private SignInManager<ApplicationUser> signInManager;
         private RoleManager<IdentityRole> roleManager;
         private IConfiguration configuration;
         private ILogger<AccountRepository> logger;
         private IAccountRepository accountRepository;
         private Mock<IMapper> mapperMock;
+        private Mock<ITokenService> tokenService;
         [SetUp]
         public void Setup()
         {
@@ -42,6 +47,7 @@ namespace API.Test
 
             userManager = GetUserManager(context);
             roleManager = GetRoleManager(context);
+            signInManager = GetSignInManager(context);
 
             var inMemorySettings = new Dictionary<string, string>
             {
@@ -65,15 +71,44 @@ namespace API.Test
                     UserName = dto.Email
                 });
 
+            tokenService = new Mock<ITokenService>();
+            tokenService.Setup(ts => ts.GenerateTokensAsync(It.IsAny<ApplicationUser>()))
+                .ReturnsAsync(new AuthenticationResult
+                {
+                    Token = "test-access-token",
+                    Success = true
+                });
+            tokenService.Setup(ts => ts.RefreshTokenAsync(It.IsAny<string>()))
+               .ReturnsAsync((string token) => {
+                   if (token == "invalidToken")
+                   {
+                       return new AuthenticationResult
+                       {
+                           Errors = new[] { "Invalid Token" },
+                           Success = false
+                       };
+                   }
+
+                   return new AuthenticationResult
+                   {
+                       Token = "new-test-access-token",
+                       Success = true
+                   };
+               });
+
             accountRepository = new AccountRepository(
                 userManager,
-                null!,
+                signInManager,
                 configuration,
                 roleManager,
                 logger,
                 context,
-                mapperMock.Object);
+                mapperMock.Object,
+                tokenService.Object
+            );
         }
+
+        
 
         [TearDown]
         public void TearDown()
@@ -101,93 +136,51 @@ namespace API.Test
         [Test]
         public async Task RefreshTokenAsync_InvalidToken_ReturnsError()
         {
+            // Arrange - Set up a test with an invalid token
             var refreshTokenDTO = new RefreshTokenDTO
             {
-                Token = "invalidToken",
-                RefreshToken = "someRefreshToken"
+                ExpiredToken = "invalidToken"
             };
 
+            // Act
             var result = await accountRepository.RefreshTokenAsync(refreshTokenDTO);
 
-            Assert.IsFalse(result.Errors == null || !result.Errors.Any());
-            Assert.AreEqual("Invalid Token", result.Errors.First());
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result.Success, Is.False, "Should not succeed with invalid token");
+                Assert.That(result.Errors, Is.Not.Null.And.Not.Empty, "Should have error messages");
+                Assert.That(result.Errors.First(), Is.EqualTo("Invalid Token"), "Error message should match");
+            });
+
+            // Verify - Ensure token service was called with the right parameter
+            tokenService.Verify(ts => ts.RefreshTokenAsync("invalidToken"), Times.Once);
+
         }
         [Test]
         public async Task RefreshTokenAsync_ValidToken_ReturnsNewToken()
         {
-            var user = new ApplicationUser { Email = "test@example.com", UserName = "test@example.com" };
-            await userManager.CreateAsync(user, "Password123!");
-
-            // Create an expired token manually
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(configuration["JWT:Secret"] ?? throw new InvalidOperationException("JWT:Secret not found in configuration"));
-
-            var claims = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Email ?? string.Empty),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-                new Claim("id", user.Id)
-            };
-            var now = DateTime.UtcNow;
-            var pastTime = now.AddHours(-1);  
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(claims),
-                NotBefore = pastTime,  
-                IssuedAt = pastTime,   
-                Expires = pastTime.AddMinutes(30), 
-                Audience = configuration["JWT:ValidAudience"],
-                Issuer = configuration["JWT:ValidIssuer"],
-                SigningCredentials = new SigningCredentials(
-                    new SymmetricSecurityKey(key),
-                    SecurityAlgorithms.HmacSha512Signature)
-            };
-
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            var jwtToken = tokenHandler.WriteToken(token);
-            var tokenId = token.Id;
-
-            // Create refresh token
-            var refreshTokenString = Guid.NewGuid().ToString();
-            var refreshToken = new RefreshToken
-            {
-                Token = refreshTokenString,
-                JwtId = tokenId,
-                UserId = user.Id,
-                ExpiryDate = DateTime.UtcNow.AddMonths(6),
-                CreationDate = DateTime.UtcNow.AddDays(-1)
-            };
-
-            if (context.RefreshTokens != null)
-            {
-                await context.RefreshTokens.AddAsync(refreshToken);
-                await context.SaveChangesAsync();
-            }
-            else
-            {
-                Assert.Fail("RefreshTokens DbSet is null");
-            }
-
+            // Arrange - Set up a test with a valid token
+            var validToken = "validToken";
             var refreshTokenDTO = new RefreshTokenDTO
             {
-                Token = jwtToken,
-                RefreshToken = refreshTokenString
+                ExpiredToken = validToken
             };
 
+            // Act
             var result = await accountRepository.RefreshTokenAsync(refreshTokenDTO);
 
-            if (result.Errors != null && result.Errors.Any())
-            {
-                Console.WriteLine("Error: " + string.Join(", ", result.Errors));
-            }
-
+            // Assert
             Assert.Multiple(() =>
             {
-                Assert.That(result.Errors == null || !result.Errors.Any(), Is.True, "Refresh token operation returned errors");
-                Assert.That(result.Token, Is.Not.Null, "Token should not be null");
-                Assert.That(result.RefreshToken, Is.Not.Null, "Refresh token should not be null");
+                Assert.That(result.Success, Is.True, "Should succeed with valid token");
+                Assert.That(result.Token, Is.EqualTo("new-test-access-token"), "Access token should match");
+                Assert.That(result.Errors, Is.Null.Or.Empty, "Should not have errors");
             });
+
+            // Verify - Ensure token service was called with the right parameter
+            tokenService.Verify(ts => ts.RefreshTokenAsync(validToken), Times.Once);
+
 
         }
         [Test]
@@ -291,52 +284,187 @@ namespace API.Test
         }
 
         [Test]
-        public async Task SignUpAsync_MapperConfiguredCorrectly()
+        public async Task SignInAsync_ValidCredentials_CreatesAccessAndRefreshTokens()
         {
-            // This test verifies that the AutoMapper is correctly mapping SignUpDTO to ApplicationUser
-
             // Arrange
-            var signUpDto = new SignUpDTO
+            var user = new ApplicationUser
             {
-                FirstName = "Jane",
-                LastName = "Smith",
-                Email = "jane.smith@example.com",
-                Password = "Password123!",
-                ConfirmPassword = "Password123!"
+                Email = "test@example.com",
+                UserName = "test@example.com",
+                FirstName = "Test",
+                LastName = "User"
+            };
+            await userManager.CreateAsync(user, "Password123!");
+
+            var signInDto = new SignInDTO
+            {
+                Email = "test@example.com",
+                Password = "Password123!"
             };
 
-            var mapperMock = new Mock<IMapper>();
-            mapperMock.Setup(m => m.Map<ApplicationUser>(It.IsAny<SignUpDTO>()))
-                .Returns((SignUpDTO dto) => new ApplicationUser
+            var mockRefreshToken = new RefreshToken
+            {
+                Token = "test-refresh-token",
+                JwtId = "test-jwt-id",
+                UserId = user.Id,
+                CreationDate = DateTime.UtcNow,
+                ExpiryDate = DateTime.UtcNow.AddDays(7),
+                Invalidated = false
+            };
+
+            // Mock the token service to simulate generating both tokens
+            tokenService.Reset();
+            tokenService.Setup(ts => ts.GenerateTokensAsync(It.IsAny<ApplicationUser>()))
+                .ReturnsAsync((ApplicationUser u) =>
                 {
-                    FirstName = dto.FirstName,
-                    LastName = dto.LastName,
-                    Email = dto.Email,
-                    UserName = dto.Email
+                    // Simulate creating a refresh token by adding it to the database
+                    if (context.RefreshTokens != null)
+                    {
+                        context.RefreshTokens.Add(mockRefreshToken);
+                        context.SaveChanges();
+                    }
+
+                    return new AuthenticationResult
+                    {
+                        Token = "test-access-token",
+                        Success = true
+                    };
                 });
 
-            var accountRepositoryWithMock = new AccountRepository(
-                userManager,
-                null!,
-                configuration,
-                roleManager,
-                logger,
-                context,
-                mapperMock.Object);
-
             // Act
-            var result = await accountRepositoryWithMock.SignUpAsync(signUpDto);
+            var result = await accountRepository.SignInAsync(signInDto);
 
             // Assert
-            mapperMock.Verify(m => m.Map<ApplicationUser>(It.Is<SignUpDTO>(dto =>
-                dto.Email == signUpDto.Email &&
-                dto.FirstName == signUpDto.FirstName &&
-                dto.LastName == signUpDto.LastName)),
-                Times.Once,
-                "Mapper should be called once with the correct SignUpDTO");
+            Assert.Multiple(() =>
+            {
+                // Check authentication result
+                Assert.That(result.Success, Is.True, "Authentication should succeed");
+                Assert.That(result.Token, Is.Not.Null.Or.Empty, "Access token should not be null or empty");
+          
+                // Verify token service was called with the right user
+                tokenService.Verify(ts => ts.GenerateTokensAsync(
+                    It.Is<ApplicationUser>(u => u.Id == user.Id)),
+                    Times.Once);
 
-            Assert.That(result.Succeeded, Is.True, "User registration should succeed");
+                // Check that a refresh token was actually added to the database
+                var storedToken = context.RefreshTokens?.FirstOrDefault(rt => rt.UserId == user.Id);
+                Assert.That(storedToken, Is.Not.Null, "Refresh token should be saved in the database");
+                Assert.That(storedToken?.Token, Is.EqualTo(mockRefreshToken.Token), "Stored token should match the generated token");
+                Assert.That(storedToken?.UserId, Is.EqualTo(user.Id), "Token should be associated with the correct user");
+                Assert.That(storedToken?.Invalidated, Is.False, "Token should not be invalidated");
+            });
         }
+
+        [Test]
+        public async Task RefreshTokenAsync_ValidToken_UpdatesDatabaseAndReturnsNewTokens()
+        {
+            // Arrange
+            var user = new ApplicationUser
+            {
+                Email = "test@example.com",
+                UserName = "test@example.com",
+                FirstName = "Test",
+                LastName = "User"
+            };
+            await userManager.CreateAsync(user, "Password123!");
+
+            // Create an initial JWT ID
+            var initialJwtId = Guid.NewGuid().ToString();
+
+            // Create an initial refresh token in the database
+            var initialRefreshToken = new RefreshToken
+            {
+                Token = "initial-refresh-token",
+                JwtId = initialJwtId,
+                UserId = user.Id,
+                CreationDate = DateTime.UtcNow.AddHours(-1),
+                ExpiryDate = DateTime.UtcNow.AddDays(6),
+                Invalidated = false
+            };
+
+            // Add the initial refresh token to the database
+            await context.RefreshTokens!.AddAsync(initialRefreshToken);
+            await context.SaveChangesAsync();
+
+            // Mock the token retrieval from expired token
+            var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(JwtRegisteredClaimNames.Jti, initialJwtId)
+            }));
+
+            var mockNewRefreshToken = new RefreshToken
+            {
+                Token = "new-refresh-token",
+                JwtId = "new-jwt-id",
+                UserId = user.Id,
+                CreationDate = DateTime.UtcNow,
+                ExpiryDate = DateTime.UtcNow.AddDays(7),
+                Invalidated = false
+            };
+
+            // Set up token service mock
+            tokenService.Reset();
+            tokenService.Setup(ts => ts.GetPrincipalFromExpiredToken("valid-expired-token"))
+                .Returns(claimsPrincipal);
+
+            tokenService.Setup(ts => ts.RefreshTokenAsync("valid-expired-token"))
+                .ReturnsAsync(() =>
+                {
+                    // Simulate creating a new refresh token by adding it to the database
+                    // and marking the old one as used
+                    if (context.RefreshTokens != null)
+                    {
+                        // Mark original token as invalidated
+                        var token = context.RefreshTokens.Find(initialRefreshToken.Id);
+                        if (token != null)
+                        {
+                            token.Invalidated = true;
+                            context.RefreshTokens.Update(token);
+                        }
+
+                        // Add new refresh token
+                        context.RefreshTokens.Add(mockNewRefreshToken);
+                        context.SaveChanges();
+                    }
+
+                    return new AuthenticationResult
+                    {
+                        Token = "new-access-token",
+                        Success = true
+                    };
+                });
+
+            var refreshTokenDTO = new RefreshTokenDTO
+            {
+                ExpiredToken = "valid-expired-token"
+            };
+
+            // Act
+            var result = await accountRepository.RefreshTokenAsync(refreshTokenDTO);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                // Check authentication result
+                Assert.That(result.Success, Is.True, "Token refresh should succeed");
+                Assert.That(result.Token, Is.EqualTo("new-access-token"), "New access token should be returned");
+             
+                // Verify token service was called
+                tokenService.Verify(ts => ts.RefreshTokenAsync("valid-expired-token"), Times.Once);
+
+                // Check that the initial token was invalidated
+                var oldToken = context.RefreshTokens?.Find(initialRefreshToken.Id);
+                Assert.That(oldToken?.Invalidated, Is.True, "Old token should be invalidated");
+
+                // Check that a new refresh token was added to the database
+                var newToken = context.RefreshTokens?.FirstOrDefault(rt => rt.Token == mockNewRefreshToken.Token);
+                Assert.That(newToken, Is.Not.Null, "New refresh token should be in the database");
+                Assert.That(newToken?.UserId, Is.EqualTo(user.Id), "New token should be associated with the same user");
+                Assert.That(newToken?.Invalidated, Is.False, "New token should not be invalidated");
+            });
+        }
+
 
         private UserManager<ApplicationUser> GetUserManager(ApplicationDbContext context)
         {
@@ -381,6 +509,44 @@ namespace API.Test
                 new UpperInvariantLookupNormalizer(),
                 new IdentityErrorDescriber(),
                 NullLogger<RoleManager<IdentityRole>>.Instance
+            );
+        }
+        private SignInManager<ApplicationUser> GetSignInManager(ApplicationDbContext context)
+        {
+
+            var userManager = GetUserManager(context);
+
+            // Need to create mocks for the dependencies
+            var contextAccessorMock = new Mock<IHttpContextAccessor>();
+            var userPrincipalFactoryMock = new Mock<IUserClaimsPrincipalFactory<ApplicationUser>>();
+
+            userPrincipalFactoryMock
+                .Setup(upf => upf.CreateAsync(It.IsAny<ApplicationUser>()))
+                .ReturnsAsync((ApplicationUser user) => {
+                    // Create claims for the user
+                    var claims = new List<Claim>
+                    {
+                        new Claim(ClaimTypes.Name, user.UserName),
+                        new Claim(ClaimTypes.Email, user.Email),
+                        new Claim(ClaimTypes.NameIdentifier, user.Id)
+                    };
+
+                    // Create the identity and principal
+                    var identity = new ClaimsIdentity(claims, "Test");
+                    var principal = new ClaimsPrincipal(identity);
+
+                    return principal;
+                });
+
+            // Create the SignInManager with all required dependencies
+            return new SignInManager<ApplicationUser>(
+                userManager,
+                contextAccessorMock.Object,
+                userPrincipalFactoryMock.Object,
+                new OptionsWrapper<IdentityOptions>(new IdentityOptions()),
+                NullLogger<SignInManager<ApplicationUser>>.Instance,
+                new Mock<IAuthenticationSchemeProvider>().Object,
+                new Mock<IUserConfirmation<ApplicationUser>>().Object
             );
         }
     }

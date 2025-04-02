@@ -140,5 +140,28 @@ namespace API.Repositories
                 throw;
             }
         }
+
+        public async Task<IEnumerable<TransactionDTO>> GetTransactionsByWalletIdAsync(Guid walletId)
+        {
+            _logger.LogInformation("Fetching transactions for wallet with ID: {WalletID}", walletId);
+
+            try
+            {
+                var transactions = await _context.Transactions
+                    .Where(t => t.WalletID == walletId)
+                    .ToListAsync();
+
+                _logger.LogInformation("Successfully retrieved {Count} transactions for wallet with ID: {WalletID}",
+                    transactions.Count, walletId);
+
+                return _mapper.Map<IEnumerable<TransactionDTO>>(transactions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while fetching transactions for wallet with ID: {WalletID}", walletId);
+                throw;
+            }
+        }
+
     }
 }

@@ -8,6 +8,7 @@ namespace API.Repositories
     public interface ITransactionRepository
     {
         Task<IEnumerable<TransactionDTO>> GetAllTransactionsAsync();
+        Task<IEnumerable<TransactionDTO>> GetTransactionsByWalletIdAsync(Guid walletId);
         Task<TransactionDTO?> GetTransactionByIdAsync(Guid transactionId);
         Task<TransactionDTO> CreateTransactionAsync(CreateTransactionDTO model);
         Task<TransactionDTO> UpdateTransactionAsync(UpdateTransactionDTO model);
