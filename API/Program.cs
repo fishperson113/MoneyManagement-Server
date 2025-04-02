@@ -7,6 +7,7 @@ using API.Repositories;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using API.Models.Entities;
+using API.Services; 
 using System.Security.Cryptography.X509Certificates;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -66,6 +67,7 @@ builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IWalletRepository, WalletRepository>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<ITokenService, TokenService>();
 
 builder.Services.AddAuthentication(options =>
 {
