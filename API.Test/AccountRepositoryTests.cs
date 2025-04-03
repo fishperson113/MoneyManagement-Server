@@ -122,17 +122,45 @@ namespace API.Test
         [Test]
         public async Task ClearDatabaseAsync_RemovesAllUsersAndRoles()
         {
+            // Setup - Create user and role
             var user = new ApplicationUser { Email = "test@example.com", UserName = "test@example.com" };
             await userManager.CreateAsync(user, "Password123!");
-            await roleManager.CreateAsync(new IdentityRole("Customer"));
 
-            Assert.IsNotEmpty(await userManager.Users.ToListAsync());
-            Assert.IsNotEmpty(await roleManager.Roles.ToListAsync());
+            // Ensure Customer role exists
+            if (!await roleManager.RoleExistsAsync(AppRole.Customer))
+            {
+                await roleManager.CreateAsync(new IdentityRole(AppRole.Customer));
+            }
 
-            await accountRepository.ClearDatabaseAsync();
+            // Add user to role
+            await userManager.AddToRoleAsync(user, AppRole.Customer);
 
-            Assert.IsEmpty(await userManager.Users.ToListAsync());
-            Assert.IsEmpty(await roleManager.Roles.ToListAsync());
+            // Verify setup is correct
+            var initialUsers = await userManager.Users.ToListAsync();
+            var initialRoles = await roleManager.Roles.ToListAsync();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(initialUsers.Count, Is.GreaterThan(0), "Should have at least one user before cleanup");
+                Assert.That(initialRoles.Count, Is.GreaterThan(0), "Should have at least one role before cleanup");
+               // Assert.IsTrue(await userManager.IsInRoleAsync(user, AppRole.Customer), "User should be in Customer role");
+            });
+
+            // Act
+            var result = await accountRepository.ClearDatabaseAsync();
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.IsTrue(result, "ClearDatabaseAsync should return true on success");
+
+                var remainingUsers = userManager.Users.ToList();
+                var remainingRoles = roleManager.Roles.ToList();
+
+                Assert.That(remainingUsers.Count, Is.EqualTo(0), $"All users should be removed, but found {remainingUsers.Count}");
+                Assert.That(remainingRoles.Count, Is.EqualTo(0), $"All roles should be removed, but found {remainingRoles.Count}");
+            });
+
         }
         [Test]
         public async Task RefreshTokenAsync_InvalidToken_ReturnsError()

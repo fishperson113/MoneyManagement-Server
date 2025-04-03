@@ -65,23 +65,41 @@ namespace API.Repositories
 
                 // Delete transactions first (they depend on wallets and categories)
                 logger.LogInformation("Deleting transactions...");
-                await context.Transactions
-                    .Where(t => !adminUsers.Select(a => a.Id).Contains(
-                        context.Wallets.Where(w => w.WalletID == t.WalletID).Select(w => w.UserID).FirstOrDefault()
-                    ))
-                    .ExecuteDeleteAsync();
+                if (context.Transactions != null)
+                {
+                    var transactionsToDelete = await context.Transactions
+                        .Where(t => !adminUsers.Select(a => a.Id).Contains(
+                            context.Wallets.Where(w => w.WalletID == t.WalletID).Select(w => w.UserID).FirstOrDefault()
+                        ))
+                        .ToListAsync();
+
+                    context.Transactions.RemoveRange(transactionsToDelete);
+                    await context.SaveChangesAsync();
+                }
 
                 // Delete wallets next (they depend on users)
                 logger.LogInformation("Deleting wallets...");
-                await context.Wallets
-                    .Where(w => !adminUsers.Select(a => a.Id).Contains(w.UserID))
-                    .ExecuteDeleteAsync();
+                if (context.Wallets != null)
+                {
+                    var walletsToDelete = await context.Wallets
+                        .Where(w => !adminUsers.Select(a => a.Id).Contains(w.UserID))
+                        .ToListAsync();
+
+                    context.Wallets.RemoveRange(walletsToDelete);
+                    await context.SaveChangesAsync();
+                }
 
                 // Delete refresh tokens (they depend on users)
                 logger.LogInformation("Deleting refresh tokens...");
-                await context.RefreshTokens
-                    .Where(rt => !adminUsers.Select(a => a.Id).Contains(rt.UserId))
-                    .ExecuteDeleteAsync();
+                if (context.RefreshTokens != null)
+                {
+                    var refreshTokensToDelete = await context.RefreshTokens
+                        .Where(rt => !adminUsers.Select(a => a.Id).Contains(rt.UserId))
+                        .ToListAsync();
+
+                    context.RefreshTokens.RemoveRange(refreshTokensToDelete);
+                    await context.SaveChangesAsync();
+                }
 
                 // Now delete the users (excluding admins)
                 logger.LogInformation("Deleting non-admin users...");
