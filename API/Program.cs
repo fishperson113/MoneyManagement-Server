@@ -10,6 +10,7 @@ using API.Models.Entities;
 using API.Services; 
 using System.Security.Cryptography.X509Certificates;
 using API.Helpers;
+using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,6 +71,7 @@ builder.Services.AddScoped<IWalletRepository, WalletRepository>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<SeedService>();
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 
@@ -105,9 +107,14 @@ using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     var dbContext = services.GetRequiredService<ApplicationDbContext>();
+    var seedService = services.GetRequiredService<SeedService>();
 
     dbContext.Database.Migrate();
+
+    await seedService.SeedAdminUserAndRole();
 }
+
+
 
 app.Use(async (context, next) =>
 {
@@ -132,3 +139,4 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
