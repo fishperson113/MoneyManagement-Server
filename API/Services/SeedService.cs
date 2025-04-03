@@ -54,6 +54,11 @@ public class SeedService
     }
     public async Task SeedTestUserWithData()
     {
+        // Ensure the role exists
+        if (!await _roleManager.RoleExistsAsync(AppRole.Customer))
+        {
+            await _roleManager.CreateAsync(new IdentityRole(AppRole.Customer));
+        }
         // Create test user
         var testUserEmail = "test@example.com";
         var testUser = await _userManager.FindByEmailAsync(testUserEmail);

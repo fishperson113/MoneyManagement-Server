@@ -46,29 +46,101 @@ namespace API.Repositories
         public async Task<bool> ClearDatabaseAsync()
         {
             logger.LogInformation("Starting to clear database data for Identity.");
-
-            var users = await userManager.Users.ToListAsync();
             bool success = true;
-            foreach (var user in users)
+
+            try
             {
-                var result = await userManager.DeleteAsync(user);
-                if (!result.Succeeded)
+                // First, identify admin users to preserve
+                var users = await userManager.Users.ToListAsync();
+                var adminUsers = new List<ApplicationUser>();
+
+                foreach (var user in users)
                 {
-                    logger.LogError("Failed to delete user {UserId}. Errors: {Errors}", user.Id, string.Join(", ", result.Errors.Select(e => e.Description)));
-                    success = false;
+                    if (await userManager.IsInRoleAsync(user, AppRole.Admin))
+                    {
+                        adminUsers.Add(user);
+                        logger.LogInformation("Identified admin user to preserve: {UserId}", user.Id);
+                    }
                 }
+
+                // Delete transactions first (they depend on wallets and categories)
+                logger.LogInformation("Deleting transactions...");
+                await context.Transactions
+                    .Where(t => !adminUsers.Select(a => a.Id).Contains(
+                        context.Wallets.Where(w => w.WalletID == t.WalletID).Select(w => w.UserID).FirstOrDefault()
+                    ))
+                    .ExecuteDeleteAsync();
+
+                // Delete wallets next (they depend on users)
+                logger.LogInformation("Deleting wallets...");
+                await context.Wallets
+                    .Where(w => !adminUsers.Select(a => a.Id).Contains(w.UserID))
+                    .ExecuteDeleteAsync();
+
+                // Delete refresh tokens (they depend on users)
+                logger.LogInformation("Deleting refresh tokens...");
+                await context.RefreshTokens
+                    .Where(rt => !adminUsers.Select(a => a.Id).Contains(rt.UserId))
+                    .ExecuteDeleteAsync();
+
+                // Now delete the users (excluding admins)
+                logger.LogInformation("Deleting non-admin users...");
+                foreach (var user in users)
+                {
+                    if (adminUsers.Contains(user))
+                    {
+                        logger.LogInformation("Skipping admin user: {UserId}", user.Id);
+                        continue;
+                    }
+
+                    try
+                    {
+                        var result = await userManager.DeleteAsync(user);
+                        if (!result.Succeeded)
+                        {
+                            logger.LogError("Failed to delete user {UserId}. Errors: {Errors}",
+                                user.Id, string.Join(", ", result.Errors.Select(e => e.Description)));
+                            success = false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Exception occurred while deleting user {UserId}", user.Id);
+                        success = false;
+                    }
+                }
+
+                // Finally delete non-admin roles
+                logger.LogInformation("Deleting non-admin roles...");
+                var roles = await roleManager.Roles
+                    .Where(r => r.Name != AppRole.Admin)
+                    .ToListAsync();
+
+                foreach (var role in roles)
+                {
+                    try
+                    {
+                        var result = await roleManager.DeleteAsync(role);
+                        if (!result.Succeeded)
+                        {
+                            logger.LogError("Failed to delete role {RoleId}. Errors: {Errors}",
+                                role.Id, string.Join(", ", result.Errors.Select(e => e.Description)));
+                            success = false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Exception occurred while deleting role {RoleId}", role.Id);
+                        success = false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Exception occurred during database clear operation");
+                success = false;
             }
 
-            var roles = await roleManager.Roles.ToListAsync();
-            foreach (var role in roles)
-            {
-                var result = await roleManager.DeleteAsync(role);
-                if (!result.Succeeded)
-                {
-                    logger.LogError("Failed to delete role {RoleId}. Errors: {Errors}", role.Id, string.Join(", ", result.Errors.Select(e => e.Description)));
-                    success = false;
-                }
-            }
             logger.LogInformation("Database clear operation completed.");
             return success;
         }
