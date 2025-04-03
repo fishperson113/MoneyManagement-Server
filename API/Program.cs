@@ -64,7 +64,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 builder.Services.AddIdentityApiEndpoints<ApplicationUser>();
 
-builder.Services.AddAutoMapper(typeof(Program));
+builder.Services.AddAutoMapper(typeof(Program), typeof(ApplicationMapper));
 
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IWalletRepository, WalletRepository>();
@@ -112,6 +112,7 @@ using (var scope = app.Services.CreateScope())
     dbContext.Database.Migrate();
 
     await seedService.SeedAdminUserAndRole();
+    await seedService.SeedTestUserWithData();
 }
 
 
