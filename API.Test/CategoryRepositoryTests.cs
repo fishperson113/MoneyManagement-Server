@@ -1,11 +1,11 @@
 using API.Data;
+using API.Helpers;
 using API.Models.DTOs;
 using API.Models.Entities;
 using API.Repositories;
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Moq;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -18,8 +18,8 @@ namespace API.Test
     public class CategoryRepositoryTests
     {
         private ApplicationDbContext context;
-        private Mock<IMapper> mapperMock;
-        private Mock<ILogger<CategoryRepository>> loggerMock;
+        private IMapper mapper;
+        private ILogger<CategoryRepository> logger;
         private ICategoryRepository categoryRepository;
 
         [SetUp]
@@ -30,9 +30,20 @@ namespace API.Test
                 .Options;
             context = new ApplicationDbContext(options);
 
-            mapperMock = new Mock<IMapper>();
-            loggerMock = new Mock<ILogger<CategoryRepository>>();
-            categoryRepository = new CategoryRepository(context, mapperMock.Object, loggerMock.Object);
+            var config = new MapperConfiguration(cfg =>
+            {
+                cfg.AddProfile<ApplicationMapper>();
+            });
+            mapper = config.CreateMapper();
+
+            var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConsole();
+                builder.SetMinimumLevel(LogLevel.Information);
+            });
+            logger = loggerFactory.CreateLogger<CategoryRepository>();
+
+            categoryRepository = new CategoryRepository(context, mapper, logger);
         }
 
         [TearDown]
@@ -46,21 +57,16 @@ namespace API.Test
         {
             // Arrange
             var createCategoryDTO = new CreateCategoryDTO { Name = "Test Category" };
-            var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
-            var categoryDTO = new CategoryDTO { CategoryID = category.CategoryID, Name = "Test Category", CreatedAt = DateTime.UtcNow };
-
-            mapperMock.Setup(m => m.Map<Category>(createCategoryDTO)).Returns(category);
-            mapperMock.Setup(m => m.Map<CategoryDTO>(category)).Returns(categoryDTO);
 
             // Act
             var result = await categoryRepository.CreateCategoryAsync(createCategoryDTO);
 
             // Assert
+            var createdCategory = await context.Categories.FindAsync(result?.CategoryID);
             Assert.Multiple(() =>
             {
-                Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result!.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
-                Assert.That(result.Name, Is.EqualTo(categoryDTO.Name), "Name should match");
+                Assert.That(createdCategory, Is.Not.Null, "Category should exist in the database");         
+                Assert.That(createdCategory?.Name, Is.EqualTo(createCategoryDTO.Name), "Name in DB should match the input Name");
             });
         }
 
@@ -75,17 +81,16 @@ namespace API.Test
             context.Categories.Add(category);
             await context.SaveChangesAsync();
 
-            mapperMock.Setup(m => m.Map<CategoryDTO>(category)).Returns(categoryDTO);
-
             // Act
             var result = await categoryRepository.UpdateCategoryAsync(updateCategoryDTO);
 
             // Assert
+            var updatedCategory = await context.Categories.FindAsync(result?.CategoryID);
             Assert.Multiple(() =>
             {
-                Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result!.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
-                Assert.That(result.Name, Is.EqualTo(categoryDTO.Name), "Name should match");
+                Assert.That(updatedCategory, Is.Not.Null, "Result should not be null");
+                Assert.That(updatedCategory?.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
+                Assert.That(updatedCategory?.Name, Is.EqualTo(categoryDTO.Name), "Name should match");
             });
         }
 
@@ -103,28 +108,21 @@ namespace API.Test
             var result = await categoryRepository.DeleteCategoryByIdAsync(deleteCategoryByIdDTO);
 
             // Assert
-            Assert.That(result, Is.EqualTo(deleteCategoryByIdDTO.CategoryID), "Deleted CategoryID should match");
+            var deletedCategory = await context.Categories.FindAsync(result);
+            Assert.That(deletedCategory, Is.Null, "Deleted CategoryID should not be found");
         }
-
         [Test]
         public async Task GetAllCategoriesAsync_ShouldReturnAllCategories()
         {
             // Arrange
             var categories = new List<Category>
-                    {
-                        new Category { CategoryID = Guid.NewGuid(), Name = "Category 1", CreatedAt = DateTime.UtcNow },
-                        new Category { CategoryID = Guid.NewGuid(), Name = "Category 2", CreatedAt = DateTime.UtcNow }
-                    };
-            var categoryDTOs = new List<CategoryDTO>
-                    {
-                        new CategoryDTO { CategoryID = categories[0].CategoryID, Name = "Category 1", CreatedAt = DateTime.UtcNow },
-                        new CategoryDTO { CategoryID = categories[1].CategoryID, Name = "Category 2", CreatedAt = DateTime.UtcNow }
-                    };
+            {
+                new Category { CategoryID = Guid.NewGuid(), Name = "Category 1", CreatedAt = DateTime.UtcNow },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Category 2", CreatedAt = DateTime.UtcNow }
+            };
 
             context.Categories.AddRange(categories);
             await context.SaveChangesAsync();
-
-            mapperMock.Setup(m => m.Map<IEnumerable<CategoryDTO>>(categories)).Returns(categoryDTOs);
 
             // Act
             var result = await categoryRepository.GetAllCategoriesAsync();
@@ -134,8 +132,13 @@ namespace API.Test
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
                 Assert.That(result.Count(), Is.EqualTo(2), "Result count should be 2");
+
+                var resultList = result.ToList();
+                Assert.That(resultList[0].CategoryID, Is.EqualTo(categories[0].CategoryID), "First category ID should match");
+                Assert.That(resultList[1].CategoryID, Is.EqualTo(categories[1].CategoryID), "Second category ID should match");
             });
         }
+
 
         [Test]
         public async Task GetCategoryByIdAsync_ShouldReturnCategory()
@@ -148,8 +151,6 @@ namespace API.Test
             context.Categories.Add(category);
             await context.SaveChangesAsync();
 
-            mapperMock.Setup(m => m.Map<CategoryDTO>(category)).Returns(categoryDTO);
-
             // Act
             var result = await categoryRepository.GetCategoryByIdAsync(getCategoryByIdDTO);
 
@@ -157,9 +158,10 @@ namespace API.Test
             Assert.Multiple(() =>
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result!.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
-                Assert.That(result.Name, Is.EqualTo(categoryDTO.Name), "Name should match");
+                Assert.That(result?.CategoryID, Is.EqualTo(categoryDTO.CategoryID), "CategoryID should match");
+                Assert.That(result?.Name, Is.EqualTo(categoryDTO.Name), "Name should match");
             });
         }
     }
 }
+

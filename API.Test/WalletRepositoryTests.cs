@@ -1,11 +1,11 @@
 using API.Data;
+using API.Helpers;
 using API.Models.DTOs;
 using API.Models.Entities;
 using API.Repositories;
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Moq;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -18,8 +18,8 @@ namespace API.Test
     public class WalletRepositoryTests
     {
         private ApplicationDbContext context;
-        private Mock<IMapper> mapperMock;
-        private Mock<ILogger<WalletRepository>> loggerMock;
+        private IMapper mapper;
+        private ILogger<WalletRepository> logger;
         private IWalletRepository walletRepository;
 
         [SetUp]
@@ -30,9 +30,20 @@ namespace API.Test
                 .Options;
             context = new ApplicationDbContext(options);
 
-            mapperMock = new Mock<IMapper>();
-            loggerMock = new Mock<ILogger<WalletRepository>>();
-            walletRepository = new WalletRepository(context, mapperMock.Object, loggerMock.Object);
+            var config = new MapperConfiguration(cfg =>
+            {
+                cfg.AddProfile<ApplicationMapper>();
+            });
+            mapper = config.CreateMapper();
+
+            var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConsole();
+                builder.SetMinimumLevel(LogLevel.Information);
+            });
+            logger = loggerFactory.CreateLogger<WalletRepository>();
+
+            walletRepository = new WalletRepository(context, mapper, logger);
         }
 
         [TearDown]
@@ -65,27 +76,21 @@ namespace API.Test
                 Balance = createWalletDTO.Balance,
                 User = user
             };
-            var walletDTO = new WalletDTO
-            {
-                WalletID = wallet.WalletID,
-                UserID = wallet.UserID,
-                WalletName = wallet.WalletName,
-                Balance = wallet.Balance
-            };
 
-            mapperMock.Setup(m => m.Map<Wallet>(createWalletDTO)).Returns(wallet);
-            mapperMock.Setup(m => m.Map<WalletDTO>(wallet)).Returns(walletDTO);
+            context.Users.Add(user);
+            await context.SaveChangesAsync();
 
             // Act
             var result = await walletRepository.CreateWalletAsync(createWalletDTO);
 
             // Assert
+            var createdWallet = await context.Wallets.FindAsync(result.WalletID);
             Assert.Multiple(() =>
             {
-                Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.WalletID, Is.EqualTo(walletDTO.WalletID), "WalletID should match");
-                Assert.That(result.WalletName, Is.EqualTo(walletDTO.WalletName), "WalletName should match");
-                Assert.That(result.Balance, Is.EqualTo(walletDTO.Balance), "Balance should match");
+                Assert.That(createdWallet, Is.Not.Null, "Wallet should exist in the database");
+                Assert.That(createdWallet?.UserID, Is.EqualTo(createWalletDTO.UserID), "UserID should match");
+                Assert.That(createdWallet?.WalletName, Is.EqualTo(createWalletDTO.WalletName), "WalletName should match");
+                Assert.That(createdWallet?.Balance, Is.EqualTo(createWalletDTO.Balance), "Balance should match");
             });
         }
 
@@ -114,29 +119,22 @@ namespace API.Test
                 Balance = 1000,
                 User = user
             };
-            var walletDTO = new WalletDTO
-            {
-                WalletID = updateWalletDTO.WalletID,
-                UserID = updateWalletDTO.UserID,
-                WalletName = updateWalletDTO.WalletName,
-                Balance = updateWalletDTO.Balance
-            };
 
+            context.Users.Add(user);
             context.Wallets.Add(wallet);
             await context.SaveChangesAsync();
-
-            mapperMock.Setup(m => m.Map<WalletDTO>(wallet)).Returns(walletDTO);
 
             // Act
             var result = await walletRepository.UpdateWalletAsync(updateWalletDTO);
 
             // Assert
+            var updatedWallet = await context.Wallets.FindAsync(result?.WalletID);
             Assert.Multiple(() =>
             {
-                Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.WalletID, Is.EqualTo(walletDTO.WalletID), "WalletID should match");
-                Assert.That(result.WalletName, Is.EqualTo(walletDTO.WalletName), "WalletName should match");
-                Assert.That(result.Balance, Is.EqualTo(walletDTO.Balance), "Balance should match");
+                Assert.That(updatedWallet, Is.Not.Null, "Wallet should exist in the database");
+                Assert.That(updatedWallet?.UserID, Is.EqualTo(updateWalletDTO.UserID), "UserID should match");
+                Assert.That(updatedWallet?.WalletName, Is.EqualTo(updateWalletDTO.WalletName), "WalletName should match");
+                Assert.That(updatedWallet?.Balance, Is.EqualTo(updateWalletDTO.Balance), "Balance should match");
             });
         }
 
@@ -160,6 +158,7 @@ namespace API.Test
                 User = user
             };
 
+            context.Users.Add(user);
             context.Wallets.Add(wallet);
             await context.SaveChangesAsync();
 
@@ -167,7 +166,8 @@ namespace API.Test
             var result = await walletRepository.DeleteWalletByIdAsync(walletId);
 
             // Assert
-            Assert.That(result, Is.EqualTo(walletId), "Deleted WalletID should match");
+            var deletedWallet = await context.Wallets.FindAsync(result);
+            Assert.That(deletedWallet, Is.Null, "Deleted WalletID should not be found");
         }
 
         [Test]
@@ -191,16 +191,10 @@ namespace API.Test
                 new Wallet { WalletID = Guid.NewGuid(), UserID = user1.Id, WalletName = "Wallet 1", Balance = 1000, User = user1 },
                 new Wallet { WalletID = Guid.NewGuid(), UserID = user2.Id, WalletName = "Wallet 2", Balance = 2000, User = user2 }
             };
-            var walletDTOs = new List<WalletDTO>
-            {
-                new WalletDTO { WalletID = wallets[0].WalletID, UserID = wallets[0].UserID, WalletName = "Wallet 1", Balance = 1000 },
-                new WalletDTO { WalletID = wallets[1].WalletID, UserID = wallets[1].UserID, WalletName = "Wallet 2", Balance = 2000 }
-            };
 
+            context.Users.AddRange(user1, user2);
             context.Wallets.AddRange(wallets);
             await context.SaveChangesAsync();
-
-            mapperMock.Setup(m => m.Map<IEnumerable<WalletDTO>>(wallets)).Returns(walletDTOs);
 
             // Act
             var result = await walletRepository.GetAllWalletsAsync();
@@ -210,6 +204,15 @@ namespace API.Test
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
                 Assert.That(result.Count(), Is.EqualTo(2), "Result count should be 2");
+
+                var resultList = result.ToList();
+                Assert.That(resultList[0].UserID, Is.EqualTo(wallets[0].UserID), "First wallet UserID should match");
+                Assert.That(resultList[0].WalletName, Is.EqualTo(wallets[0].WalletName), "First wallet WalletName should match");
+                Assert.That(resultList[0].Balance, Is.EqualTo(wallets[0].Balance), "First wallet Balance should match");
+
+                Assert.That(resultList[1].UserID, Is.EqualTo(wallets[1].UserID), "Second wallet UserID should match");
+                Assert.That(resultList[1].WalletName, Is.EqualTo(wallets[1].WalletName), "Second wallet WalletName should match");
+                Assert.That(resultList[1].Balance, Is.EqualTo(wallets[1].Balance), "Second wallet Balance should match");
             });
         }
 
@@ -232,18 +235,10 @@ namespace API.Test
                 Balance = 1000,
                 User = user
             };
-            var walletDTO = new WalletDTO
-            {
-                WalletID = walletId,
-                UserID = wallet.UserID,
-                WalletName = wallet.WalletName,
-                Balance = wallet.Balance
-            };
 
+            context.Users.Add(user);
             context.Wallets.Add(wallet);
             await context.SaveChangesAsync();
-
-            mapperMock.Setup(m => m.Map<WalletDTO>(wallet)).Returns(walletDTO);
 
             // Act
             var result = await walletRepository.GetWalletByIdAsync(walletId);
@@ -251,17 +246,10 @@ namespace API.Test
             // Assert
             Assert.Multiple(() =>
             {
-                // Update the assertion to handle the possibility of a null reference
-                Assert.Multiple(() =>
-                {
-                    Assert.That(result, Is.Not.Null, "Result should not be null");
-                    if (result != null)
-                    {
-                        Assert.That(result.WalletID, Is.EqualTo(walletDTO.WalletID), "WalletID should match");
-                        Assert.That(result.WalletName, Is.EqualTo(walletDTO.WalletName), "WalletName should match");
-                        Assert.That(result.Balance, Is.EqualTo(walletDTO.Balance), "Balance should match");
-                    }
-                });
+                Assert.That(result, Is.Not.Null, "Wallet should exist in the database");
+                Assert.That(result?.UserID, Is.EqualTo(wallet.UserID), "UserID should match");
+                Assert.That(result?.WalletName, Is.EqualTo(wallet.WalletName), "WalletName should match");
+                Assert.That(result?.Balance, Is.EqualTo(wallet.Balance), "Balance should match");
             });
         }
     }

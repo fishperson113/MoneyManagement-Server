@@ -1,11 +1,11 @@
 using API.Data;
+using API.Helpers;
 using API.Models.DTOs;
 using API.Models.Entities;
 using API.Repositories;
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Moq;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -18,8 +18,8 @@ namespace API.Test
     public class TransactionRepositoryTests
     {
         private ApplicationDbContext context;
-        private Mock<IMapper> mapperMock;
-        private Mock<ILogger<TransactionRepository>> loggerMock;
+        private IMapper mapper;
+        private ILogger<TransactionRepository> logger;
         private ITransactionRepository transactionRepository;
 
         [SetUp]
@@ -30,9 +30,20 @@ namespace API.Test
                 .Options;
             context = new ApplicationDbContext(options);
 
-            mapperMock = new Mock<IMapper>();
-            loggerMock = new Mock<ILogger<TransactionRepository>>();
-            transactionRepository = new TransactionRepository(context, mapperMock.Object, loggerMock.Object);
+            var config = new MapperConfiguration(cfg =>
+            {
+                cfg.AddProfile<ApplicationMapper>();
+            });
+            mapper = config.CreateMapper();
+
+            var loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConsole();
+                builder.SetMinimumLevel(LogLevel.Information);
+            });
+            logger = loggerFactory.CreateLogger<TransactionRepository>();
+
+            transactionRepository = new TransactionRepository(context, mapper, logger);
         }
 
         [TearDown]
@@ -67,39 +78,24 @@ namespace API.Test
                 Balance = 1000,
                 User = new ApplicationUser()
             };
-            var transaction = new Transaction
-            {
-                TransactionID = Guid.NewGuid(),
-                CategoryID = createTransactionDTO.CategoryID,
-                Amount = createTransactionDTO.Amount,
-                Description = createTransactionDTO.Description,
-                TransactionDate = createTransactionDTO.TransactionDate,
-                WalletID = createTransactionDTO.WalletID,
-                Category = category,
-                Wallet = wallet
-            };
-            var transactionDTO = new TransactionDTO
-            {
-                TransactionID = transaction.TransactionID,
-                CategoryID = transaction.CategoryID,
-                Amount = transaction.Amount,
-                Description = transaction.Description,
-                TransactionDate = transaction.TransactionDate,
-                WalletID = transaction.WalletID
-            };
 
-            mapperMock.Setup(m => m.Map<Transaction>(createTransactionDTO)).Returns(transaction);
-            mapperMock.Setup(m => m.Map<TransactionDTO>(transaction)).Returns(transactionDTO);
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
+            await context.SaveChangesAsync();
 
             // Act
             var result = await transactionRepository.CreateTransactionAsync(createTransactionDTO);
 
             // Assert
+            var createdTransaction = await context.Transactions.FindAsync(result.TransactionID);
             Assert.Multiple(() =>
             {
-                Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.TransactionID, Is.EqualTo(transactionDTO.TransactionID), "TransactionID should match");
-                Assert.That(result.Amount, Is.EqualTo(transactionDTO.Amount), "Amount should match");
+                Assert.That(createdTransaction, Is.Not.Null, "Transaction should exist in the database");
+                Assert.That(createdTransaction?.CategoryID, Is.EqualTo(createTransactionDTO.CategoryID), "CategoryID should match");
+                Assert.That(createdTransaction?.Amount, Is.EqualTo(createTransactionDTO.Amount), "Amount should match");
+                Assert.That(createdTransaction?.Description, Is.EqualTo(createTransactionDTO.Description), "Description should match");
+                Assert.That(createdTransaction?.TransactionDate, Is.EqualTo(createTransactionDTO.TransactionDate), "TransactionDate should match");
+                Assert.That(createdTransaction?.WalletID, Is.EqualTo(createTransactionDTO.WalletID), "WalletID should match");
             });
         }
 
@@ -141,30 +137,25 @@ namespace API.Test
                 Category = category,
                 Wallet = wallet
             };
-            var transactionDTO = new TransactionDTO
-            {
-                TransactionID = updateTransactionDTO.TransactionID,
-                CategoryID = updateTransactionDTO.CategoryID,
-                Amount = updateTransactionDTO.Amount,
-                Description = updateTransactionDTO.Description,
-                TransactionDate = updateTransactionDTO.TransactionDate,
-                WalletID = updateTransactionDTO.WalletID
-            };
 
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
             context.Transactions.Add(transaction);
             await context.SaveChangesAsync();
-
-            mapperMock.Setup(m => m.Map<TransactionDTO>(transaction)).Returns(transactionDTO);
 
             // Act
             var result = await transactionRepository.UpdateTransactionAsync(updateTransactionDTO);
 
             // Assert
+            var updatedTransaction = await context.Transactions.FindAsync(result?.TransactionID);
             Assert.Multiple(() =>
             {
-                Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.TransactionID, Is.EqualTo(transactionDTO.TransactionID), "TransactionID should match");
-                Assert.That(result.Amount, Is.EqualTo(transactionDTO.Amount), "Amount should match");
+                Assert.That(updatedTransaction, Is.Not.Null, "Transaction should exist in the database");
+                Assert.That(updatedTransaction?.CategoryID, Is.EqualTo(updateTransactionDTO.CategoryID), "CategoryID should match");
+                Assert.That(updatedTransaction?.Amount, Is.EqualTo(updateTransactionDTO.Amount), "Amount should match");
+                Assert.That(updatedTransaction?.Description, Is.EqualTo(updateTransactionDTO.Description), "Description should match");
+                Assert.That(updatedTransaction?.TransactionDate, Is.EqualTo(updateTransactionDTO.TransactionDate), "TransactionDate should match");
+                Assert.That(updatedTransaction?.WalletID, Is.EqualTo(updateTransactionDTO.WalletID), "WalletID should match");
             });
         }
 
@@ -199,6 +190,8 @@ namespace API.Test
                 Wallet = wallet
             };
 
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
             context.Transactions.Add(transaction);
             await context.SaveChangesAsync();
 
@@ -206,7 +199,8 @@ namespace API.Test
             var result = await transactionRepository.DeleteTransactionByIdAsync(transactionId);
 
             // Assert
-            Assert.That(result, Is.EqualTo(transactionId), "Deleted TransactionID should match");
+            var deletedTransaction = await context.Transactions.FindAsync(result);
+            Assert.That(deletedTransaction, Is.Null, "Deleted TransactionID should not be found");
         }
 
         [Test]
@@ -246,16 +240,11 @@ namespace API.Test
                 new Transaction { TransactionID = Guid.NewGuid(), CategoryID = category1.CategoryID, Amount = 100, Description = "Transaction 1", TransactionDate = DateTime.UtcNow, WalletID = wallet1.WalletID, Category = category1, Wallet = wallet1 },
                 new Transaction { TransactionID = Guid.NewGuid(), CategoryID = category2.CategoryID, Amount = 200, Description = "Transaction 2", TransactionDate = DateTime.UtcNow, WalletID = wallet2.WalletID, Category = category2, Wallet = wallet2 }
             };
-            var transactionDTOs = new List<TransactionDTO>
-            {
-                new TransactionDTO { TransactionID = transactions[0].TransactionID, CategoryID = transactions[0].CategoryID, Amount = 100, Description = "Transaction 1", TransactionDate = DateTime.UtcNow, WalletID = transactions[0].WalletID },
-                new TransactionDTO { TransactionID = transactions[1].TransactionID, CategoryID = transactions[1].CategoryID, Amount = 200, Description = "Transaction 2", TransactionDate = DateTime.UtcNow, WalletID = transactions[1].WalletID }
-            };
 
+            context.Categories.AddRange(category1, category2);
+            context.Wallets.AddRange(wallet1, wallet2);
             context.Transactions.AddRange(transactions);
             await context.SaveChangesAsync();
-
-            mapperMock.Setup(m => m.Map<IEnumerable<TransactionDTO>>(transactions)).Returns(transactionDTOs);
 
             // Act
             var result = await transactionRepository.GetAllTransactionsAsync();
@@ -265,6 +254,19 @@ namespace API.Test
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
                 Assert.That(result.Count(), Is.EqualTo(2), "Result count should be 2");
+
+                var resultList = result.ToList();
+                Assert.That(resultList[0].CategoryID, Is.EqualTo(transactions[0].CategoryID), "First transaction CategoryID should match");
+                Assert.That(resultList[0].Amount, Is.EqualTo(transactions[0].Amount), "First transaction Amount should match");
+                Assert.That(resultList[0].Description, Is.EqualTo(transactions[0].Description), "First transaction Description should match");
+                Assert.That(resultList[0].TransactionDate, Is.EqualTo(transactions[0].TransactionDate), "First transaction TransactionDate should match");
+                Assert.That(resultList[0].WalletID, Is.EqualTo(transactions[0].WalletID), "First transaction WalletID should match");
+
+                Assert.That(resultList[1].CategoryID, Is.EqualTo(transactions[1].CategoryID), "Second transaction CategoryID should match");
+                Assert.That(resultList[1].Amount, Is.EqualTo(transactions[1].Amount), "Second transaction Amount should match");
+                Assert.That(resultList[1].Description, Is.EqualTo(transactions[1].Description), "Second transaction Description should match");
+                Assert.That(resultList[1].TransactionDate, Is.EqualTo(transactions[1].TransactionDate), "Second transaction TransactionDate should match");
+                Assert.That(resultList[1].WalletID, Is.EqualTo(transactions[1].WalletID), "Second transaction WalletID should match");
             });
         }
 
@@ -298,33 +300,24 @@ namespace API.Test
                 Category = category,
                 Wallet = wallet
             };
-            var transactionDTO = new TransactionDTO
-            {
-                TransactionID = transactionId,
-                CategoryID = transaction.CategoryID,
-                Amount = transaction.Amount,
-                Description = transaction.Description,
-                TransactionDate = transaction.TransactionDate,
-                WalletID = transaction.WalletID
-            };
 
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
             context.Transactions.Add(transaction);
             await context.SaveChangesAsync();
-
-            mapperMock.Setup(m => m.Map<TransactionDTO>(transaction)).Returns(transactionDTO);
 
             // Act
             var result = await transactionRepository.GetTransactionByIdAsync(transactionId);
 
-            // Add null checks before dereferencing result
+            // Assert
             Assert.Multiple(() =>
             {
-                Assert.That(result, Is.Not.Null, "Result should not be null");
-                if (result != null)
-                {
-                    Assert.That(result.TransactionID, Is.EqualTo(transactionDTO.TransactionID), "TransactionID should match");
-                    Assert.That(result.Amount, Is.EqualTo(transactionDTO.Amount), "Amount should match");
-                }
+                Assert.That(result, Is.Not.Null, "Transaction should exist in the database");
+                Assert.That(result?.CategoryID, Is.EqualTo(transaction.CategoryID), "CategoryID should match");
+                Assert.That(result?.Amount, Is.EqualTo(transaction.Amount), "Amount should match");
+                Assert.That(result?.Description, Is.EqualTo(transaction.Description), "Description should match");
+                Assert.That(result?.TransactionDate, Is.EqualTo(transaction.TransactionDate), "TransactionDate should match");
+                Assert.That(result?.WalletID, Is.EqualTo(transaction.WalletID), "WalletID should match");
             });
         }
 
@@ -357,7 +350,6 @@ namespace API.Test
                 User = new ApplicationUser()
             };
 
-            // Create three transactions, two for the target wallet and one for another wallet
             var transactions = new List<Transaction>
             {
                 new Transaction {
@@ -392,44 +384,10 @@ namespace API.Test
                  }
             };
 
-            var expectedTransactions = transactions.Where(t => t.WalletID == walletId).ToList();
-
-            var transactionDTOs = new List<TransactionDTO>
-            {
-                new TransactionDTO {
-                    TransactionID = expectedTransactions[0].TransactionID,
-                    CategoryID = expectedTransactions[0].CategoryID,
-                    Amount = expectedTransactions[0].Amount,
-                    Description = expectedTransactions[0].Description,
-                    TransactionDate = expectedTransactions[0].TransactionDate,
-                    WalletID = expectedTransactions[0].WalletID
-                },
-                new TransactionDTO {
-                    TransactionID = expectedTransactions[1].TransactionID,
-                    CategoryID = expectedTransactions[1].CategoryID,
-                    Amount = expectedTransactions[1].Amount,
-                    Description = expectedTransactions[1].Description,
-                    TransactionDate = expectedTransactions[1].TransactionDate,
-                    WalletID = expectedTransactions[1].WalletID
-                }
-            };
-
+            context.Categories.Add(category);
+            context.Wallets.AddRange(wallet, otherWallet);
             context.Transactions.AddRange(transactions);
             await context.SaveChangesAsync();
-
-            mapperMock.Setup(m => m.Map<IEnumerable<TransactionDTO>>(It.IsAny<IEnumerable<Transaction>>()))
-                .Returns((IEnumerable<Transaction> src) =>
-                {
-                    return src.Select(t => new TransactionDTO
-                    {
-                        TransactionID = t.TransactionID,
-                        CategoryID = t.CategoryID,
-                        Amount = t.Amount,
-                        Description = t.Description,
-                        TransactionDate = t.TransactionDate,
-                        WalletID = t.WalletID
-                    });
-                });
 
             // Act
             var result = await transactionRepository.GetTransactionsByWalletIdAsync(walletId);
@@ -440,18 +398,18 @@ namespace API.Test
                 Assert.That(result, Is.Not.Null, "Result should not be null");
                 Assert.That(result.Count(), Is.EqualTo(2), "Should return exactly 2 transactions");
 
-                // Verify that all returned transactions belong to the specified wallet
-                foreach (var transaction in result)
-                {
-                    Assert.That(transaction.WalletID, Is.EqualTo(walletId), "All transactions should belong to the specified wallet");
-                }
-
-                // Verify transaction details
                 var resultList = result.ToList();
-                Assert.That(resultList[0].TransactionID, Is.EqualTo(expectedTransactions[0].TransactionID), "First transaction ID should match");
-                Assert.That(resultList[1].TransactionID, Is.EqualTo(expectedTransactions[1].TransactionID), "Second transaction ID should match");
-                Assert.That(resultList[0].Amount, Is.EqualTo(expectedTransactions[0].Amount), "First transaction amount should match");
-                Assert.That(resultList[1].Amount, Is.EqualTo(expectedTransactions[1].Amount), "Second transaction amount should match");
+                Assert.That(resultList[0].CategoryID, Is.EqualTo(transactions[0].CategoryID), "First transaction CategoryID should match");
+                Assert.That(resultList[0].Amount, Is.EqualTo(transactions[0].Amount), "First transaction Amount should match");
+                Assert.That(resultList[0].Description, Is.EqualTo(transactions[0].Description), "First transaction Description should match");
+                Assert.That(resultList[0].TransactionDate, Is.EqualTo(transactions[0].TransactionDate), "First transaction TransactionDate should match");
+                Assert.That(resultList[0].WalletID, Is.EqualTo(transactions[0].WalletID), "First transaction WalletID should match");
+
+                Assert.That(resultList[1].CategoryID, Is.EqualTo(transactions[1].CategoryID), "Second transaction CategoryID should match");
+                Assert.That(resultList[1].Amount, Is.EqualTo(transactions[1].Amount), "Second transaction Amount should match");
+                Assert.That(resultList[1].Description, Is.EqualTo(transactions[1].Description), "Second transaction Description should match");
+                Assert.That(resultList[1].TransactionDate, Is.EqualTo(transactions[1].TransactionDate), "Second transaction TransactionDate should match");
+                Assert.That(resultList[1].WalletID, Is.EqualTo(transactions[1].WalletID), "Second transaction WalletID should match");
             });
         }
     }
