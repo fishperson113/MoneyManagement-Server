@@ -31,7 +31,7 @@ namespace API.Repositories
                 category.CreatedAt = DateTime.UtcNow;
 
                 _context.Categories.Add(category);
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync();          
 
                 _logger.LogInformation("Category created successfully with ID: {CategoryID}", category.CategoryID);
                 return _mapper.Map<CategoryDTO>(category);

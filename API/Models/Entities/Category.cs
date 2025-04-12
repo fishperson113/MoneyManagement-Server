@@ -4,7 +4,7 @@
     {
         public Guid CategoryID { get; set; }
         public required string Name { get; set; }
-        public required DateTime CreatedAt { get; set; }
+        public required DateTime CreatedAt { get; set; } 
         public ICollection<Transaction>? Transactions { get; set; } 
     }
 }
