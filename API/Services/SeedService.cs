@@ -86,37 +86,31 @@ public class SeedService
             }
         }
 
-        // Check if test user already has wallets
-        if (!await _dbContext.Wallets.AnyAsync(w => w.UserID == testUser.Id))
+        // Check if we already have wallets in the system
+        if (!await _dbContext.Wallets.AnyAsync())
         {
-            // Add wallets
+            // Add wallets (no longer associated with users)
             var wallets = new List<Wallet>
+        {
+            new Wallet
             {
-                new Wallet
-                {
-                    WalletID = Guid.NewGuid(),
-                    WalletName = "Cash Wallet",
-                    Balance = 1000000M,
-                    UserID = testUser.Id,
-                    User = testUser
-                },
-                new Wallet
-                {
-                    WalletID = Guid.NewGuid(),
-                    WalletName = "Bank Account",
-                    Balance = 5000000M,
-                    UserID = testUser.Id,
-                    User = testUser
-                },
-                new Wallet
-                {
-                    WalletID = Guid.NewGuid(),
-                    WalletName = "Credit Card",
-                    Balance = -2000000M,
-                    UserID = testUser.Id,
-                    User = testUser
-                }
-            };
+                WalletID = Guid.NewGuid(),
+                WalletName = "Cash Wallet",
+                Balance = 1000000M
+            },
+            new Wallet
+            {
+                WalletID = Guid.NewGuid(),
+                WalletName = "Bank Account",
+                Balance = 5000000M
+            },
+            new Wallet
+            {
+                WalletID = Guid.NewGuid(),
+                WalletName = "Credit Card",
+                Balance = -2000000M
+            }
+        };
 
             await _dbContext.Wallets.AddRangeAsync(wallets);
             await _dbContext.SaveChangesAsync();
@@ -124,22 +118,22 @@ public class SeedService
             // Add categories
             var now = DateTime.Now;
             var expenseCategories = new List<Category>
-            {
-                new Category { CategoryID = Guid.NewGuid(), Name = "Food & Dining", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Transportation", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Entertainment", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Housing", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Utilities", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Shopping", CreatedAt = now }
-            };
+        {
+            new Category { CategoryID = Guid.NewGuid(), Name = "Food & Dining", CreatedAt = now },
+            new Category { CategoryID = Guid.NewGuid(), Name = "Transportation", CreatedAt = now },
+            new Category { CategoryID = Guid.NewGuid(), Name = "Entertainment", CreatedAt = now },
+            new Category { CategoryID = Guid.NewGuid(), Name = "Housing", CreatedAt = now },
+            new Category { CategoryID = Guid.NewGuid(), Name = "Utilities", CreatedAt = now },
+            new Category { CategoryID = Guid.NewGuid(), Name = "Shopping", CreatedAt = now }
+        };
 
             var incomeCategories = new List<Category>
-            {
-                new Category { CategoryID = Guid.NewGuid(), Name = "Salary", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Freelance", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Gifts", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Investments", CreatedAt = now }
-            };
+        {
+            new Category { CategoryID = Guid.NewGuid(), Name = "Salary", CreatedAt = now },
+            new Category { CategoryID = Guid.NewGuid(), Name = "Freelance", CreatedAt = now },
+            new Category { CategoryID = Guid.NewGuid(), Name = "Gifts", CreatedAt = now },
+            new Category { CategoryID = Guid.NewGuid(), Name = "Investments", CreatedAt = now }
+        };
 
             await _dbContext.Categories.AddRangeAsync(expenseCategories);
             await _dbContext.Categories.AddRangeAsync(incomeCategories);
@@ -186,5 +180,6 @@ public class SeedService
             await _dbContext.SaveChangesAsync();
         }
     }
+
 }
 

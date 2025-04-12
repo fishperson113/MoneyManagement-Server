@@ -62,10 +62,8 @@ namespace API.Test
             var wallet = new Wallet
             {
                 WalletID = createTransactionDTO.WalletID,
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Test Wallet",
                 Balance = 1000,
-                User = new ApplicationUser()
             };
             var transaction = new Transaction
             {
@@ -125,10 +123,8 @@ namespace API.Test
             var wallet = new Wallet
             {
                 WalletID = updateTransactionDTO.WalletID,
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Test Wallet",
                 Balance = 1000,
-                User = new ApplicationUser()
             };
             var transaction = new Transaction
             {
@@ -182,10 +178,8 @@ namespace API.Test
             var wallet = new Wallet
             {
                 WalletID = Guid.NewGuid(),
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Test Wallet",
-                Balance = 1000,
-                User = new ApplicationUser()
+                Balance = 1000
             };
             var transaction = new Transaction
             {
@@ -228,18 +222,14 @@ namespace API.Test
             var wallet1 = new Wallet
             {
                 WalletID = Guid.NewGuid(),
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Wallet 1",
-                Balance = 1000,
-                User = new ApplicationUser()
+                Balance = 1000
             };
             var wallet2 = new Wallet
             {
                 WalletID = Guid.NewGuid(),
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Wallet 2",
-                Balance = 2000,
-                User = new ApplicationUser()
+                Balance = 2000
             };
             var transactions = new List<Transaction>
             {
@@ -282,10 +272,8 @@ namespace API.Test
             var wallet = new Wallet
             {
                 WalletID = Guid.NewGuid(),
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Test Wallet",
-                Balance = 1000,
-                User = new ApplicationUser()
+                Balance = 1000
             };
             var transaction = new Transaction
             {
@@ -343,18 +331,14 @@ namespace API.Test
             var wallet = new Wallet
             {
                 WalletID = walletId,
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Test Wallet",
-                Balance = 1000,
-                User = new ApplicationUser()
+                Balance = 1000
             };
             var otherWallet = new Wallet
             {
                 WalletID = otherWalletId,
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Other Wallet",
-                Balance = 2000,
-                User = new ApplicationUser()
+                Balance = 2000
             };
 
             // Create three transactions, two for the target wallet and one for another wallet

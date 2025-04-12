@@ -67,13 +67,8 @@ namespace API.Repositories
                 logger.LogInformation("Deleting transactions...");
                 if (context.Transactions != null)
                 {
-                    var transactionsToDelete = await context.Transactions
-                        .Where(t => !adminUsers.Select(a => a.Id).Contains(
-                            context.Wallets.Where(w => w.WalletID == t.WalletID).Select(w => w.UserID).FirstOrDefault()
-                        ))
-                        .ToListAsync();
-
-                    context.Transactions.RemoveRange(transactionsToDelete);
+                    var allTransactions = await context.Transactions.ToListAsync();
+                    context.Transactions.RemoveRange(allTransactions);
                     await context.SaveChangesAsync();
                 }
 
@@ -81,11 +76,8 @@ namespace API.Repositories
                 logger.LogInformation("Deleting wallets...");
                 if (context.Wallets != null)
                 {
-                    var walletsToDelete = await context.Wallets
-                        .Where(w => !adminUsers.Select(a => a.Id).Contains(w.UserID))
-                        .ToListAsync();
-
-                    context.Wallets.RemoveRange(walletsToDelete);
+                    var allWallets = await context.Wallets.ToListAsync();
+                    context.Wallets.RemoveRange(allWallets);
                     await context.SaveChangesAsync();
                 }
 

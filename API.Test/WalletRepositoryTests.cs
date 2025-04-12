@@ -47,28 +47,23 @@ namespace API.Test
             // Arrange
             var createWalletDTO = new CreateWalletDTO
             {
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Test Wallet",
                 Balance = 1000
             };
             var user = new ApplicationUser
             {
-                Id = createWalletDTO.UserID,
                 UserName = "testuser",
                 Email = "testuser@example.com"
             };
             var wallet = new Wallet
             {
                 WalletID = Guid.NewGuid(),
-                UserID = createWalletDTO.UserID,
                 WalletName = createWalletDTO.WalletName,
-                Balance = createWalletDTO.Balance,
-                User = user
+                Balance = createWalletDTO.Balance
             };
             var walletDTO = new WalletDTO
             {
                 WalletID = wallet.WalletID,
-                UserID = wallet.UserID,
                 WalletName = wallet.WalletName,
                 Balance = wallet.Balance
             };
@@ -96,28 +91,23 @@ namespace API.Test
             var updateWalletDTO = new UpdateWalletDTO
             {
                 WalletID = Guid.NewGuid(),
-                UserID = Guid.NewGuid().ToString(),
                 WalletName = "Updated Wallet",
                 Balance = 2000
             };
             var user = new ApplicationUser
             {
-                Id = updateWalletDTO.UserID,
                 UserName = "testuser",
                 Email = "testuser@example.com"
             };
             var wallet = new Wallet
             {
                 WalletID = updateWalletDTO.WalletID,
-                UserID = updateWalletDTO.UserID,
                 WalletName = "Old Wallet",
-                Balance = 1000,
-                User = user
+                Balance = 1000
             };
             var walletDTO = new WalletDTO
             {
                 WalletID = updateWalletDTO.WalletID,
-                UserID = updateWalletDTO.UserID,
                 WalletName = updateWalletDTO.WalletName,
                 Balance = updateWalletDTO.Balance
             };
@@ -154,10 +144,8 @@ namespace API.Test
             var wallet = new Wallet
             {
                 WalletID = walletId,
-                UserID = user.Id,
                 WalletName = "Test Wallet",
-                Balance = 1000,
-                User = user
+                Balance = 1000
             };
 
             context.Wallets.Add(wallet);
@@ -188,13 +176,13 @@ namespace API.Test
             };
             var wallets = new List<Wallet>
             {
-                new Wallet { WalletID = Guid.NewGuid(), UserID = user1.Id, WalletName = "Wallet 1", Balance = 1000, User = user1 },
-                new Wallet { WalletID = Guid.NewGuid(), UserID = user2.Id, WalletName = "Wallet 2", Balance = 2000, User = user2 }
+                new Wallet { WalletID = Guid.NewGuid(), WalletName = "Wallet 1", Balance = 1000 },
+                new Wallet { WalletID = Guid.NewGuid(), WalletName = "Wallet 2", Balance = 2000 }
             };
             var walletDTOs = new List<WalletDTO>
             {
-                new WalletDTO { WalletID = wallets[0].WalletID, UserID = wallets[0].UserID, WalletName = "Wallet 1", Balance = 1000 },
-                new WalletDTO { WalletID = wallets[1].WalletID, UserID = wallets[1].UserID, WalletName = "Wallet 2", Balance = 2000 }
+                new WalletDTO { WalletID = wallets[0].WalletID, WalletName = "Wallet 1", Balance = 1000 },
+                new WalletDTO { WalletID = wallets[1].WalletID, WalletName = "Wallet 2", Balance = 2000 }
             };
 
             context.Wallets.AddRange(wallets);
@@ -227,15 +215,12 @@ namespace API.Test
             var wallet = new Wallet
             {
                 WalletID = walletId,
-                UserID = user.Id,
                 WalletName = "Test Wallet",
-                Balance = 1000,
-                User = user
+                Balance = 1000
             };
             var walletDTO = new WalletDTO
             {
                 WalletID = walletId,
-                UserID = wallet.UserID,
                 WalletName = wallet.WalletName,
                 Balance = wallet.Balance
             };

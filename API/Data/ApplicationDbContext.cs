@@ -19,10 +19,6 @@ namespace API.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Indexes for Wallet
-            modelBuilder.Entity<Wallet>()
-                .HasIndex(w => w.UserID)
-                .HasDatabaseName("IX_Wallet_UserID");
 
             modelBuilder.Entity<Wallet>()
                 .HasIndex(w => w.WalletName)
@@ -49,13 +45,6 @@ namespace API.Data
             modelBuilder.Entity<Transaction>()
                 .HasIndex(t => t.TransactionDate)
                 .HasDatabaseName("IX_Transaction_TransactionDate");
-
-            // Relationships and other configurations
-            modelBuilder.Entity<Wallet>()
-                .HasOne(w => w.User)
-                .WithMany(u => u.Wallets)
-                .HasForeignKey(w => w.UserID)
-                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Wallet>()
                 .Property(w => w.Balance)

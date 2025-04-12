@@ -100,32 +100,25 @@ namespace API.Helpers
             // Wallet Mappings
             CreateMap<WalletDTO, Wallet>()
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
-                .ForMember(dest => dest.UserID, opt => opt.MapFrom(src => src.UserID))
                 .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.WalletName))
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
-                .ForMember(dest => dest.User, opt => opt.Ignore())
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             CreateMap<Wallet, WalletDTO>()
                .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
-               .ForMember(dest => dest.UserID, opt => opt.MapFrom(src => src.UserID))
                .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.WalletName))
                .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance));
 
             CreateMap<CreateWalletDTO, Wallet>()
                 .ForMember(dest => dest.WalletID, opt => opt.Ignore())
-                .ForMember(dest => dest.UserID, opt => opt.MapFrom(src => src.UserID))
                 .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.WalletName))
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
-                .ForMember(dest => dest.User, opt => opt.Ignore())
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             CreateMap<UpdateWalletDTO, Wallet>()
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
-                .ForMember(dest => dest.UserID, opt => opt.MapFrom(src => src.UserID))
                 .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.WalletName))
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
-                .ForMember(dest => dest.User, opt => opt.Ignore())
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
         }
