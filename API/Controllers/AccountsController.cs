@@ -36,7 +36,7 @@ namespace API.Controllers
             {
                 return Unauthorized();
             }
-            return Ok(token);
+            return Ok(token.Token);
         }
         [HttpDelete("ClearDatabase")]
         [Authorize(Roles = AppRole.Admin)]
