@@ -1,0 +1,29 @@
+name: Deploy .NET Core Application
+on:
+  workflow_run:
+    workflows: [".NET Core Desktop"]  # Replace with your CI workflow name
+    branches: [main]
+    types:
+      - completed
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+    - name: Build and deploy on VPS using SSH
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          set -e  # Exit on error
+          cd /${{ secrets.SSH_USERNAME }}/MoneyManagement-Server
+          git fetch origin
+          git checkout main
+          git pull origin main
+          docker-compose down || true  # Stop and remove existing containers
+          docker-compose build
+          docker-compose up -d
+          docker image prune -f
