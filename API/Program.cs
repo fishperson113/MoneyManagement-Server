@@ -128,10 +128,12 @@ app.Use(async (context, next) =>
     }
     await next();
 });
+app.MapGet("/ping", () => "pong");
+
 
 app.MapIdentityApi<ApplicationUser>().RequireAuthorization();
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseAuthentication();
 
