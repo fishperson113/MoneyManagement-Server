@@ -99,6 +99,7 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("LocalDevelopment"))
 {
+    builder.WebHost.UseUrls("http://*:5000");
     app.UseSwagger();
     app.UseSwaggerUI();
 }

@@ -5,14 +5,11 @@ services:
         dockerfile: Dockerfile
     ports:
         - "5000:5000"
-        - "5001:5001"
     depends_on:
         - sqlserver
     environment:
         - ASPNETCORE_ENVIRONMENT=Development
-        - ASPNETCORE_URLS=http://+:5000;https://+:5001
-    volumes:
-      - /root/.dotnet/corefx/cryptography/x509stores/my:/root/.aspnet/https
+        - ASPNETCORE_URLS=http://+:5000
     networks:
         - productnetwork
     restart: on-failure
