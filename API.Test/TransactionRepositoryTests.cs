@@ -396,5 +396,178 @@ namespace API.Test
                 Assert.That(resultList[1].WalletID, Is.EqualTo(transactions[1].WalletID), "Second transaction WalletID should match");
             });
         }
+        [Test]
+        public async Task GetTransactionsByDateRangeAsync_ShouldReturnFilteredTransactions()
+        {
+            // Arrange
+            var startDate = DateTime.UtcNow.AddDays(-7);
+            var endDate = DateTime.UtcNow;
+            var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 1000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction { TransactionID = Guid.NewGuid(), CategoryID = category.CategoryID, Amount = 100, Description = "Transaction 1", TransactionDate = DateTime.UtcNow.AddDays(-3), WalletID = wallet.WalletID, Category = category, Wallet = wallet },
+                new Transaction { TransactionID = Guid.NewGuid(), CategoryID = category.CategoryID, Amount = -50, Description = "Transaction 2", TransactionDate = DateTime.UtcNow.AddDays(-5), WalletID = wallet.WalletID, Category = category, Wallet = wallet }
+            };
+
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.GetTransactionsByDateRangeAsync(startDate, endDate);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.Count(), Is.EqualTo(2), "Should return exactly 2 transactions");
+            });
+        }
+
+        [Test]
+        public async Task GetAggregateStatisticsAsync_ShouldReturnAggregatedData()
+        {
+            // Arrange
+            var startDate = DateTime.UtcNow.AddDays(-30);
+            var endDate = DateTime.UtcNow;
+            var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 1000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction { TransactionID = Guid.NewGuid(), Amount = 100, TransactionDate = DateTime.UtcNow.AddDays(-10), Wallet = wallet, Category = category },
+                new Transaction { TransactionID = Guid.NewGuid(), Amount = -50, TransactionDate = DateTime.UtcNow.AddDays(-20), Wallet = wallet, Category = category }
+            };
+
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.GetAggregateStatisticsAsync("daily", startDate, endDate);
+
+            // Assert
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.Any(), Is.True, "Should return aggregated statistics");
+        }
+
+        [Test]
+        public async Task GetCategoryBreakdownAsync_ShouldReturnCategoryBreakdown()
+        {
+            // Arrange
+            var startDate = DateTime.UtcNow.AddDays(-7);
+            var endDate = DateTime.UtcNow;
+            var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 1000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction { TransactionID = Guid.NewGuid(), CategoryID = category.CategoryID, Amount = 100, TransactionDate = DateTime.UtcNow.AddDays(-3), Wallet = wallet, Category = category },
+                new Transaction { TransactionID = Guid.NewGuid(), CategoryID = category.CategoryID, Amount = -50, TransactionDate = DateTime.UtcNow.AddDays(-5), Wallet = wallet, Category = category }
+            };
+
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.GetCategoryBreakdownAsync(startDate, endDate);
+
+            // Assert
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.Any(), Is.True, "Should return category breakdown");
+        }
+
+        [Test]
+        public async Task GetCashFlowSummaryAsync_ShouldReturnCashFlowSummary()
+        {
+            // Arrange
+            var startDate = DateTime.UtcNow.AddDays(-7);
+            var endDate = DateTime.UtcNow;
+            var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 1000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction { TransactionID = Guid.NewGuid(), Amount = 100, TransactionDate = DateTime.UtcNow.AddDays(-3), Wallet = wallet, Category = category },
+                new Transaction { TransactionID = Guid.NewGuid(), Amount = -50, TransactionDate = DateTime.UtcNow.AddDays(-5), Wallet = wallet, Category = category }
+            };
+
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.GetCashFlowSummaryAsync(startDate, endDate);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.TotalIncome, Is.EqualTo(100), "Total income should match");
+                Assert.That(result.TotalExpenses, Is.EqualTo(50), "Total expenses should match");
+                Assert.That(result.NetCashFlow, Is.EqualTo(50), "Net cash flow should match");
+            });
+        }
+
+        [Test]
+        public async Task SearchTransactionsAsync_ShouldReturnFilteredTransactions()
+        {
+            // Arrange
+            var startDate = DateTime.UtcNow.AddDays(-7);
+            var endDate = DateTime.UtcNow;
+            var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 1000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction { TransactionID = Guid.NewGuid(), CategoryID = category.CategoryID, Amount = 100, Description = "Test Transaction", TransactionDate = DateTime.UtcNow.AddDays(-3), Wallet = wallet, Category = category },
+                new Transaction { TransactionID = Guid.NewGuid(), CategoryID = category.CategoryID, Amount = -50, Description = "Another Transaction", TransactionDate = DateTime.UtcNow.AddDays(-5), Wallet = wallet, Category = category }
+            };
+
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.SearchTransactionsAsync(startDate, endDate, null, "Test Category", null, "Test", null, null);
+
+            // Assert
+            Assert.That(result, Is.Not.Null, "Result should not be null");
+            Assert.That(result.Count(), Is.EqualTo(1), "Should return exactly 1 transaction");
+        }
+
+        [Test]
+        public async Task GetDailySummaryAsync_ShouldReturnDailySummary()
+        {
+            // Arrange
+            var date = DateTime.UtcNow.Date;
+            var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 1000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction { TransactionID = Guid.NewGuid(), Amount = 100, TransactionDate = date.AddHours(10), Wallet = wallet, Category = category },
+                new Transaction { TransactionID = Guid.NewGuid(), Amount = -50, TransactionDate = date.AddHours(15), Wallet = wallet, Category = category }
+            };
+
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.GetDailySummaryAsync(date);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.TotalIncome, Is.EqualTo(100), "Total income should match");
+                Assert.That(result.TotalExpenses, Is.EqualTo(50), "Total expenses should match");
+            });
+        }
+
     }
 }
