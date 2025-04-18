@@ -133,5 +133,62 @@ namespace API.Controllers
                 return StatusCode(500, "An error occurred while deleting the transaction");
             }
         }
+
+        // GET: api/Transactions/date-range
+        // For retrieving transactions by date range with optional filters
+        [HttpGet("date-range")]
+        public async Task<IActionResult> GetTransactionsByDateRange(
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate,
+            [FromQuery] string? type = null,
+            [FromQuery] string? category = null,
+            [FromQuery] string? timeRange = null,
+            [FromQuery] string? dayOfWeek = null)
+        {
+            try
+            {
+                _logger.LogInformation("Getting transactions by date range from {StartDate} to {EndDate}",
+                    startDate, endDate);
+
+                var transactions = await _transactionRepository.GetTransactionsByDateRangeAsync(
+                    startDate, endDate, type, category, timeRange, dayOfWeek);
+
+                return Ok(transactions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving transactions by date range");
+                return StatusCode(500, "An error occurred while processing your request");
+            }
+        }
+
+        // GET: api/Transactions/search
+        // For advanced search with multiple filter options
+        [HttpGet("search")]
+        public async Task<IActionResult> SearchTransactions(
+            [FromQuery] DateTime startDate,
+            [FromQuery] DateTime endDate,
+            [FromQuery] string? type = null,
+            [FromQuery] string? category = null,
+            [FromQuery] string? amountRange = null,
+            [FromQuery] string? keywords = null,
+            [FromQuery] string? timeRange = null,
+            [FromQuery] string? dayOfWeek = null)
+        {
+            try
+            {
+                _logger.LogInformation("Searching transactions with complex filters");
+
+                var transactions = await _transactionRepository.SearchTransactionsAsync(
+                    startDate, endDate, type, category, amountRange, keywords, timeRange, dayOfWeek);
+
+                return Ok(transactions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error searching transactions");
+                return StatusCode(500, "An error occurred while processing your request");
+            }
+        }
     }
 }
