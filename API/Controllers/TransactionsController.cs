@@ -149,7 +149,10 @@ namespace API.Controllers
             {
                 _logger.LogInformation("Getting transactions by date range from {StartDate} to {EndDate}",
                     startDate, endDate);
-
+                if (type != null && type != "income" && type != "expense")
+                {
+                    return BadRequest("Type parameter must be either 'income' or 'expense'");
+                }
                 var transactions = await _transactionRepository.GetTransactionsByDateRangeAsync(
                     startDate, endDate, type, category, timeRange, dayOfWeek);
 

@@ -16,5 +16,7 @@ namespace API.Models.DTOs
         public DateTime TransactionDate { get; set; }
         [Required]
         public Guid WalletID { get; set; }
+
+        public string? Type { get; set; }
     }
 }

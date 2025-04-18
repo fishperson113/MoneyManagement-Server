@@ -46,6 +46,16 @@ namespace API.Data
                 .HasIndex(t => t.TransactionDate)
                 .HasDatabaseName("IX_Transaction_TransactionDate");
 
+            modelBuilder.Entity<Transaction>()
+                .HasIndex(t => t.Type)
+                .HasDatabaseName("IX_Transaction_Type");
+
+            modelBuilder.Entity<Transaction>()
+               .Property(t => t.Type)
+               .HasMaxLength(20)
+               .IsRequired()
+               .HasDefaultValue("expense");
+
             modelBuilder.Entity<Wallet>()
                 .Property(w => w.Balance)
                 .HasColumnType("decimal(20,4)");

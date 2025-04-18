@@ -11,6 +11,7 @@ namespace API.Models.Entities
         public string? Description { get; set; }
         public DateTime TransactionDate { get; set; }
         public Guid WalletID { get; set; }
+        public string? Type { get; set; }
         public required Wallet Wallet { get; set; }
         public required Category Category { get; set; }
     }

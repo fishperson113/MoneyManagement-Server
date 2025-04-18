@@ -66,6 +66,7 @@ namespace API.Helpers
                 .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                 .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
                 .ForMember(dest => dest.Category, opt => opt.Ignore())
                 .ForMember(dest => dest.Wallet, opt => opt.Ignore());
 
@@ -75,7 +76,8 @@ namespace API.Helpers
                .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
-               .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID));
+               .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
+               .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type));
 
             CreateMap<CreateTransactionDTO, Transaction>()
                 .ForMember(dest => dest.TransactionID, opt => opt.Ignore())
@@ -84,6 +86,7 @@ namespace API.Helpers
                 .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                 .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Amount < 0 ? "expense" : "income"))
                 .ForMember(dest => dest.Category, opt => opt.Ignore())
                 .ForMember(dest => dest.Wallet, opt => opt.Ignore());
 
@@ -94,8 +97,10 @@ namespace API.Helpers
                 .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                 .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Amount < 0 ? "expense" : "income"))
                 .ForMember(dest => dest.Category, opt => opt.Ignore())
                 .ForMember(dest => dest.Wallet, opt => opt.Ignore());
+
 
             // Wallet Mappings
             CreateMap<WalletDTO, Wallet>()
@@ -128,7 +133,7 @@ namespace API.Helpers
                .ForMember(dest => dest.DayOfWeek, opt => opt.MapFrom(src => src.TransactionDate.DayOfWeek.ToString()))
                .ForMember(dest => dest.Month, opt => opt.MapFrom(src => src.TransactionDate.ToString("MMMM")))
                .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
-               .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Amount < 0 ? "expense" : "income"))
+               .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
                .ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.Category.Name))
                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))

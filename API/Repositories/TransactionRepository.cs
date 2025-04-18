@@ -34,6 +34,17 @@ namespace API.Repositories
                 var transaction = _mapper.Map<Transaction>(model);
                 transaction.TransactionID = Guid.NewGuid();
 
+                // Set the Type based on the provided value or calculate it from Amount
+                if (!string.IsNullOrEmpty(model.Type) &&
+                    (model.Type.ToLower() == "income" || model.Type.ToLower() == "expense"))
+                {
+                    transaction.Type = model.Type.ToLower();
+                }
+                else
+                {
+                    transaction.Type = transaction.Amount < 0 ? "expense" : "income";
+                }
+
                 _context.Transactions.Add(transaction);
                 await _context.SaveChangesAsync();
 
@@ -61,6 +72,17 @@ namespace API.Repositories
                 }
 
                 _mapper.Map(model, transaction);
+
+                // Update the Type based on the provided value or calculate it from Amount
+                if (!string.IsNullOrEmpty(model.Type) &&
+                    (model.Type.ToLower() == "income" || model.Type.ToLower() == "expense"))
+                {
+                    transaction.Type = model.Type.ToLower();
+                }
+                else
+                {
+                    transaction.Type = transaction.Amount < 0 ? "expense" : "income";
+                }
 
                 _context.Transactions.Update(transaction);
                 await _context.SaveChangesAsync();
@@ -227,7 +249,7 @@ namespace API.Repositories
         }
 
         public async Task<IEnumerable<AggregateStatisticsDTO>> GetAggregateStatisticsAsync(
-            string period, DateTime startDate, DateTime endDate, string? type = null)
+    string period, DateTime startDate, DateTime endDate, string? type = null)
         {
             try
             {
@@ -240,57 +262,64 @@ namespace API.Repositories
                 // Apply type filter (income/expense)
                 if (!string.IsNullOrEmpty(type))
                 {
-                    bool isExpense = type.ToLower() == "expense";
-                    query = query.Where(t => isExpense ? t.Amount < 0 : t.Amount > 0);
+                    query = query.Where(t => t.Type.ToLower() == type.ToLower());
                 }
 
                 var transactions = await query.ToListAsync();
                 var result = new List<AggregateStatisticsDTO>();
 
-                // Group by the specified period
+                // Group by the specified period and type
                 switch (period.ToLower())
                 {
                     case "daily":
                         result = transactions
-                            .GroupBy(t => t.TransactionDate.Date)
+                            .GroupBy(t => new { t.TransactionDate.Date, Type = t.Type })
                             .Select(g => new AggregateStatisticsDTO
                             {
-                                Period = g.Key.ToString("yyyy-MM-dd"),
-                                Total = g.Sum(t => t.Amount)
+                                Period = g.Key.Date.ToString("yyyy-MM-dd"),
+                                Total = g.Sum(t => t.Amount),
+                                Type = g.Key.Type
                             })
                             .ToList();
                         break;
 
                     case "weekly":
                         result = transactions
-                            .GroupBy(t => CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(
-                                t.TransactionDate, CalendarWeekRule.FirstDay, DayOfWeek.Monday))
+                            .GroupBy(t => new
+                            {
+                                Week = CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(
+                                    t.TransactionDate, CalendarWeekRule.FirstDay, DayOfWeek.Monday),
+                                Type = t.Type
+                            })
                             .Select(g => new AggregateStatisticsDTO
                             {
-                                Period = $"{startDate.Year}-W{g.Key}",
-                                Total = g.Sum(t => t.Amount)
+                                Period = $"{startDate.Year}-W{g.Key.Week}",
+                                Total = g.Sum(t => t.Amount),
+                                Type = g.Key.Type
                             })
                             .ToList();
                         break;
 
                     case "monthly":
                         result = transactions
-                            .GroupBy(t => new { t.TransactionDate.Year, t.TransactionDate.Month })
+                            .GroupBy(t => new { t.TransactionDate.Year, t.TransactionDate.Month, Type = t.Type })
                             .Select(g => new AggregateStatisticsDTO
                             {
                                 Period = $"{g.Key.Year}-{g.Key.Month:D2}",
-                                Total = g.Sum(t => t.Amount)
+                                Total = g.Sum(t => t.Amount),
+                                Type = g.Key.Type
                             })
                             .ToList();
                         break;
 
                     case "yearly":
                         result = transactions
-                            .GroupBy(t => t.TransactionDate.Year)
+                            .GroupBy(t => new { t.TransactionDate.Year, Type = t.Type })
                             .Select(g => new AggregateStatisticsDTO
                             {
-                                Period = g.Key.ToString(),
-                                Total = g.Sum(t => t.Amount)
+                                Period = g.Key.Year.ToString(),
+                                Total = g.Sum(t => t.Amount),
+                                Type = g.Key.Type
                             })
                             .ToList();
                         break;
