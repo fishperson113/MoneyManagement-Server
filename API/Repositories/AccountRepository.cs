@@ -80,7 +80,14 @@ namespace API.Repositories
                     context.Wallets.RemoveRange(allWallets);
                     await context.SaveChangesAsync();
                 }
-
+                // Delete categories (now that transactions are gone)
+                logger.LogInformation("Deleting categories...");
+                if (context.Categories != null)
+                {
+                    var allCategories = await context.Categories.ToListAsync();
+                    context.Categories.RemoveRange(allCategories);
+                    await context.SaveChangesAsync();
+                }
                 // Delete refresh tokens (they depend on users)
                 logger.LogInformation("Deleting refresh tokens...");
                 if (context.RefreshTokens != null)

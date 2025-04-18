@@ -249,7 +249,7 @@ namespace API.Repositories
         }
 
         public async Task<IEnumerable<AggregateStatisticsDTO>> GetAggregateStatisticsAsync(
-    string period, DateTime startDate, DateTime endDate, string? type = null)
+        string period, DateTime startDate, DateTime endDate, string? type = null)
         {
             try
             {
@@ -530,6 +530,195 @@ namespace API.Repositories
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error generating daily summary");
+                throw;
+            }
+        }
+        public async Task<WeeklySummaryDTO> GetWeeklySummaryAsync(DateTime weekStartDate)
+        {
+            try
+            {
+                _logger.LogInformation("Generating weekly summary for week starting {Date}", weekStartDate);
+
+                // Ensure we start at the beginning of the provided day
+                var startOfWeek = weekStartDate.Date;
+                var endOfWeek = startOfWeek.AddDays(7).AddTicks(-1);
+
+                var transactions = await _context.Transactions
+                    .Include(t => t.Category)
+                    .Include(t => t.Wallet)
+                    .Where(t => t.TransactionDate >= startOfWeek && t.TransactionDate <= endOfWeek)
+                    .OrderBy(t => t.TransactionDate)
+                    .ToListAsync();
+
+                var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
+                var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
+                var netCashFlow = income - expenses;
+
+                // Calculate week number
+                var calendar = CultureInfo.CurrentCulture.Calendar;
+                var weekNumber = calendar.GetWeekOfYear(
+                    startOfWeek,
+                    CalendarWeekRule.FirstDay,
+                    DayOfWeek.Monday);
+
+                // Calculate daily totals for the week - FIXED VERSION
+                var dailyTotals = new Dictionary<string, decimal>();
+
+                // Group by day of week directly to avoid overwriting
+                foreach (var transaction in transactions)
+                {
+                    var dayOfWeek = transaction.TransactionDate.DayOfWeek.ToString();
+                    if (dailyTotals.ContainsKey(dayOfWeek))
+                        dailyTotals[dayOfWeek] += transaction.Amount;
+                    else
+                        dailyTotals[dayOfWeek] = transaction.Amount;
+                }
+
+                var result = new WeeklySummaryDTO
+                {
+                    StartDate = startOfWeek,
+                    EndDate = endOfWeek,
+                    WeekNumber = weekNumber,
+                    Year = startOfWeek.Year,
+                    TotalIncome = income,
+                    TotalExpenses = expenses,
+                    NetCashFlow = netCashFlow,
+                    Transactions = _mapper.Map<List<TransactionDetailDTO>>(transactions),
+                    DailyTotals = dailyTotals
+                };
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating weekly summary");
+                throw;
+            }
+        }
+
+        public async Task<MonthlySummaryDTO> GetMonthlySummaryAsync(DateTime yearMonth)
+        {
+            try
+            {
+                _logger.LogInformation("Generating monthly summary for {Year}-{Month}", yearMonth.Year, yearMonth.Month);
+
+                // Start of the month
+                var startOfMonth = new DateTime(yearMonth.Year, yearMonth.Month, 1);
+                // End of the month
+                var endOfMonth = startOfMonth.AddMonths(1).AddTicks(-1);
+
+                var transactions = await _context.Transactions
+                    .Include(t => t.Category)
+                    .Include(t => t.Wallet)
+                    .Where(t => t.TransactionDate >= startOfMonth && t.TransactionDate <= endOfMonth)
+                    .OrderBy(t => t.TransactionDate)
+                    .ToListAsync();
+
+                var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
+                var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
+                var netCashFlow = income - expenses;
+
+                // Calculate daily totals for the month
+                var dailyTotals = transactions
+                    .GroupBy(t => t.TransactionDate.Day)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Sum(t => t.Amount)
+                    );
+
+                // Calculate category totals for the month
+                var categoryTotals = transactions
+                    .GroupBy(t => t.Category.Name)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Sum(t => t.Amount)
+                    );
+
+                var result = new MonthlySummaryDTO
+                {
+                    Month = yearMonth.Month,
+                    Year = yearMonth.Year,
+                    MonthName = yearMonth.ToString("MMMM"),
+                    TotalIncome = income,
+                    TotalExpenses = expenses,
+                    NetCashFlow = netCashFlow,
+                    Transactions = _mapper.Map<List<TransactionDetailDTO>>(transactions),
+                    DailyTotals = dailyTotals,
+                    CategoryTotals = categoryTotals
+                };
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating monthly summary");
+                throw;
+            }
+        }
+
+        public async Task<YearlySummaryDTO> GetYearlySummaryAsync(int year)
+        {
+            try
+            {
+                _logger.LogInformation("Generating yearly summary for year {Year}", year);
+
+                // Start and end of the year
+                var startOfYear = new DateTime(year, 1, 1);
+                var endOfYear = new DateTime(year, 12, 31, 23, 59, 59, 999);
+
+                var transactions = await _context.Transactions
+                    .Include(t => t.Category)
+                    .Include(t => t.Wallet)
+                    .Where(t => t.TransactionDate >= startOfYear && t.TransactionDate <= endOfYear)
+                    .OrderBy(t => t.TransactionDate)
+                    .ToListAsync();
+
+                var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
+                var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
+                var netCashFlow = income - expenses;
+
+                // Calculate monthly totals for the year
+                var monthlyTotals = transactions
+                    .GroupBy(t => new { Month = t.TransactionDate.Month, MonthName = t.TransactionDate.ToString("MMMM") })
+                    .ToDictionary(
+                        g => g.Key.MonthName,
+                        g => g.Sum(t => t.Amount)
+                    );
+
+                // Calculate category totals for the year
+                var categoryTotals = transactions
+                    .GroupBy(t => t.Category.Name)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Sum(t => t.Amount)
+                    );
+
+                // Calculate quarterly totals
+                var quarterlyTotals = new Dictionary<string, decimal>
+                {
+                    { "Q1", transactions.Where(t => t.TransactionDate.Month >= 1 && t.TransactionDate.Month <= 3).Sum(t => t.Amount) },
+                    { "Q2", transactions.Where(t => t.TransactionDate.Month >= 4 && t.TransactionDate.Month <= 6).Sum(t => t.Amount) },
+                    { "Q3", transactions.Where(t => t.TransactionDate.Month >= 7 && t.TransactionDate.Month <= 9).Sum(t => t.Amount) },
+                    { "Q4", transactions.Where(t => t.TransactionDate.Month >= 10 && t.TransactionDate.Month <= 12).Sum(t => t.Amount) }
+                };
+
+                var result = new YearlySummaryDTO
+                {
+                    Year = year,
+                    TotalIncome = income,
+                    TotalExpenses = expenses,
+                    NetCashFlow = netCashFlow,
+                    Transactions = _mapper.Map<List<TransactionDetailDTO>>(transactions),
+                    MonthlyTotals = monthlyTotals,
+                    CategoryTotals = categoryTotals,
+                    QuarterlyTotals = quarterlyTotals
+                };
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating yearly summary");
                 throw;
             }
         }

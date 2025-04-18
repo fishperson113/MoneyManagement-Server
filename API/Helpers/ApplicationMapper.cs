@@ -107,6 +107,8 @@ namespace API.Helpers
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
                 .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.WalletName))
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
+                .ForMember(dest => dest.UserId, opt => opt.Ignore()) // Add this
+                .ForMember(dest => dest.User, opt => opt.Ignore())   // Add this
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             CreateMap<Wallet, WalletDTO>()
@@ -118,12 +120,16 @@ namespace API.Helpers
                 .ForMember(dest => dest.WalletID, opt => opt.Ignore())
                 .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.WalletName))
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
+                .ForMember(dest => dest.UserId, opt => opt.Ignore()) // We'll set this in controller/repository
+                .ForMember(dest => dest.User, opt => opt.Ignore())
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             CreateMap<UpdateWalletDTO, Wallet>()
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
                 .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.WalletName))
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
+                .ForMember(dest => dest.UserId, opt => opt.Ignore()) // Don't change owner when updating
+                .ForMember(dest => dest.User, opt => opt.Ignore())
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             CreateMap<Transaction, TransactionDetailDTO>()
@@ -147,6 +153,16 @@ namespace API.Helpers
             CreateMap<UpcomingBillDTO, UpcomingBillDTO>();
             CreateMap<ReportInfoDTO, ReportInfoDTO>();
             CreateMap<ReportInfoDTO, ReportInfoDTO>();
+
+            // WeeklySummaryDTO Mapping
+            CreateMap<WeeklySummaryDTO, WeeklySummaryDTO>();
+
+            // MonthlySummaryDTO Mapping
+            CreateMap<MonthlySummaryDTO, MonthlySummaryDTO>();
+
+            // YearlySummaryDTO Mapping
+            CreateMap<YearlySummaryDTO, YearlySummaryDTO>();
+
         }
 
     }

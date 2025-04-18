@@ -89,66 +89,54 @@ public class SeedService
         // Check if we already have wallets in the system
         if (!await _dbContext.Wallets.AnyAsync())
         {
-            // Add wallets (no longer associated with users)
-            var wallets = new List<Wallet>
-        {
-            new Wallet
-            {
-                WalletID = Guid.NewGuid(),
-                WalletName = "Cash Wallet",
-                Balance = 1000000M
-            },
-            new Wallet
-            {
-                WalletID = Guid.NewGuid(),
-                WalletName = "Bank Account",
-                Balance = 5000000M
-            },
-            new Wallet
-            {
-                WalletID = Guid.NewGuid(),
-                WalletName = "Credit Card",
-                Balance = -2000000M
-            }
-        };
-
-            await _dbContext.Wallets.AddRangeAsync(wallets);
-            await _dbContext.SaveChangesAsync();
-
             // Add categories
             var now = DateTime.Now;
             var expenseCategories = new List<Category>
-        {
-            new Category { CategoryID = Guid.NewGuid(), Name = "Food & Dining", CreatedAt = now },
-            new Category { CategoryID = Guid.NewGuid(), Name = "Transportation", CreatedAt = now },
-            new Category { CategoryID = Guid.NewGuid(), Name = "Entertainment", CreatedAt = now },
-            new Category { CategoryID = Guid.NewGuid(), Name = "Housing", CreatedAt = now },
-            new Category { CategoryID = Guid.NewGuid(), Name = "Utilities", CreatedAt = now },
-            new Category { CategoryID = Guid.NewGuid(), Name = "Shopping", CreatedAt = now }
-        };
+            {
+                new Category { CategoryID = Guid.NewGuid(), Name = "Food & Dining", CreatedAt = now },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Transportation", CreatedAt = now },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Entertainment", CreatedAt = now },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Housing", CreatedAt = now },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Utilities", CreatedAt = now },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Shopping", CreatedAt = now }
+            };
 
             var incomeCategories = new List<Category>
-        {
-            new Category { CategoryID = Guid.NewGuid(), Name = "Salary", CreatedAt = now },
-            new Category { CategoryID = Guid.NewGuid(), Name = "Freelance", CreatedAt = now },
-            new Category { CategoryID = Guid.NewGuid(), Name = "Gifts", CreatedAt = now },
-            new Category { CategoryID = Guid.NewGuid(), Name = "Investments", CreatedAt = now }
-        };
+            {
+                new Category { CategoryID = Guid.NewGuid(), Name = "Salary", CreatedAt = now },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Freelance", CreatedAt = now },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Gifts", CreatedAt = now },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Investments", CreatedAt = now }
+            };
 
             await _dbContext.Categories.AddRangeAsync(expenseCategories);
             await _dbContext.Categories.AddRangeAsync(incomeCategories);
             await _dbContext.SaveChangesAsync();
 
-            // Add transactions
             var allCategories = expenseCategories.Concat(incomeCategories).ToList();
             var random = new Random();
-            var transactions = new List<Transaction>();
 
-            // Generate random transactions for each wallet
-            foreach (var wallet in wallets)
+            // Create wallets and transactions in a single pass
+            var walletNames = new[] { "Cash Wallet", "Bank Account", "Credit Card" };
+
+            foreach (var walletName in walletNames)
             {
-                // Generate 5-10 transactions per wallet over the past 30 days
+                // Create the wallet with zero initial balance
+                var wallet = new Wallet
+                {
+                    WalletID = Guid.NewGuid(),
+                    WalletName = walletName,
+                    Balance = 0, // Start with zero, will update after creating transactions
+                    UserId = testUser.Id
+                };
+
+                _dbContext.Wallets.Add(wallet);
+                await _dbContext.SaveChangesAsync();
+
+                // Generate 5-10 transactions for this wallet
+                var transactions = new List<Transaction>();
                 int transactionCount = random.Next(5, 11);
+
                 for (int i = 0; i < transactionCount; i++)
                 {
                     var category = allCategories[random.Next(allCategories.Count)];
@@ -156,13 +144,13 @@ public class SeedService
 
                     // Generate amounts: negative for expenses, positive for income
                     var amount = isExpense
-                        ? random.Next(50000, 500000) * -1M
-                        : random.Next(100000, 1000000) * 1M;
+                        ? random.Next(50000, 500000) * -1M  // Expense (negative)
+                        : random.Next(100000, 1000000) * 1M; // Income (positive)
 
                     var daysAgo = random.Next(0, 30);
                     var date = DateTime.Now.AddDays(-daysAgo);
 
-                    transactions.Add(new Transaction
+                    var transaction = new Transaction
                     {
                         TransactionID = Guid.NewGuid(),
                         Amount = amount,
@@ -171,13 +159,18 @@ public class SeedService
                         WalletID = wallet.WalletID,
                         Wallet = wallet,
                         CategoryID = category.CategoryID,
-                        Category = category
-                    });
-                }
-            }
+                        Category = category,
+                        Type = isExpense ? "expense" : "income"// Correctly set the type
+                    };
 
-            await _dbContext.Transactions.AddRangeAsync(transactions);
-            await _dbContext.SaveChangesAsync();
+                    transactions.Add(transaction);
+                    wallet.Balance += amount; // Update the wallet balance based on transaction amount
+                }
+
+                await _dbContext.Transactions.AddRangeAsync(transactions);
+                _dbContext.Wallets.Update(wallet); // Update the wallet with the new balance
+                await _dbContext.SaveChangesAsync();
+            }
         }
     }
 

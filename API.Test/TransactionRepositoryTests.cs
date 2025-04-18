@@ -1057,5 +1057,337 @@ namespace API.Test
             Assert.That(createdTransaction, Is.Not.Null, "Transaction should exist in the database");
             Assert.That(createdTransaction?.Type, Is.EqualTo("expense"), "Type should be 'expense' as explicitly set");
         }
+        [Test]
+        public async Task GetWeeklySummaryAsync_ShouldReturnWeeklySummary()
+        {
+            // Arrange
+            var currentDate = DateTime.UtcNow.Date;
+            var daysUntilPreviousMonday = ((int)currentDate.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+            var weekStartDate = currentDate.AddDays(-daysUntilPreviousMonday);
+            var category = new Category { CategoryID = Guid.NewGuid(), Name = "Test Category", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 1000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = 200,
+                    TransactionDate = weekStartDate.AddDays(1), // Tuesday
+                    Type = "income",
+                    Wallet = wallet,
+                    Category = category,
+                    CategoryID = category.CategoryID,
+                    WalletID = wallet.WalletID
+                },
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = -75,
+                    TransactionDate = weekStartDate.AddDays(3), // Thursday
+                    Type = "expense",
+                    Wallet = wallet,
+                    Category = category,
+                    CategoryID = category.CategoryID,
+                    WalletID = wallet.WalletID
+                },
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = 150,
+                    TransactionDate = weekStartDate.AddDays(5), // Saturday
+                    Type = "income",
+                    Wallet = wallet,
+                    Category = category,
+                    CategoryID = category.CategoryID,
+                    WalletID = wallet.WalletID
+                }
+            };
+
+            context.Categories.Add(category);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.GetWeeklySummaryAsync(weekStartDate);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.StartDate, Is.EqualTo(weekStartDate), "Start date should match");
+                Assert.That(result.EndDate, Is.EqualTo(weekStartDate.AddDays(7).AddTicks(-1)), "End date should match");
+                Assert.That(result.TotalIncome, Is.EqualTo(350), "Total income should be 200 + 150 = 350");
+                Assert.That(result.TotalExpenses, Is.EqualTo(75), "Total expenses should be 75");
+                Assert.That(result.NetCashFlow, Is.EqualTo(275), "Net cash flow should be 350 - 75 = 275");
+                Assert.That(result.Transactions.Count, Is.EqualTo(3), "Should include 3 transactions");
+                Assert.That(result.DailyTotals.Count, Is.EqualTo(3), "Should have daily totals for 3 days");
+
+                // Verify specific days have correct totals
+                Assert.That(result.DailyTotals.ContainsKey("Tuesday"), Is.True, "Should contain Tuesday");
+                Assert.That(result.DailyTotals["Tuesday"], Is.EqualTo(200), "Tuesday total should be 200");
+
+                Assert.That(result.DailyTotals.ContainsKey("Thursday"), Is.True, "Should contain Thursday");
+                Assert.That(result.DailyTotals["Thursday"], Is.EqualTo(-75), "Thursday total should be -75");
+
+                Assert.That(result.DailyTotals.ContainsKey("Saturday"), Is.True, "Should contain Saturday");
+                Assert.That(result.DailyTotals["Saturday"], Is.EqualTo(150), "Saturday total should be 150");
+            });
+        }
+
+        [Test]
+        public async Task GetMonthlySummaryAsync_ShouldReturnMonthlySummary()
+        {
+            // Arrange
+            var now = DateTime.UtcNow;
+            var monthDate = new DateTime(now.Year, now.Month, 1); // First day of current month
+            var category1 = new Category { CategoryID = Guid.NewGuid(), Name = "Food", CreatedAt = DateTime.UtcNow };
+            var category2 = new Category { CategoryID = Guid.NewGuid(), Name = "Salary", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 1000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = 3000,
+                    TransactionDate = monthDate.AddDays(2),
+                    Type = "income",
+                    Wallet = wallet,
+                    Category = category2,
+                    CategoryID = category2.CategoryID,
+                    WalletID = wallet.WalletID
+                },
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = -120,
+                    TransactionDate = monthDate.AddDays(10),
+                    Type = "expense",
+                    Wallet = wallet,
+                    Category = category1,
+                    CategoryID = category1.CategoryID,
+                    WalletID = wallet.WalletID
+                },
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = -80,
+                    TransactionDate = monthDate.AddDays(20),
+                    Type = "expense",
+                    Wallet = wallet,
+                    Category = category1,
+                    CategoryID = category1.CategoryID,
+                    WalletID = wallet.WalletID
+                }
+            };
+
+            context.Categories.AddRange(category1, category2);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.GetMonthlySummaryAsync(monthDate);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.Month, Is.EqualTo(monthDate.Month), "Month should match");
+                Assert.That(result.Year, Is.EqualTo(monthDate.Year), "Year should match");
+                Assert.That(result.MonthName, Is.EqualTo(monthDate.ToString("MMMM")), "Month name should match");
+                Assert.That(result.TotalIncome, Is.EqualTo(3000), "Total income should be 3000");
+                Assert.That(result.TotalExpenses, Is.EqualTo(200), "Total expenses should be 120 + 80 = 200");
+                Assert.That(result.NetCashFlow, Is.EqualTo(2800), "Net cash flow should be 3000 - 200 = 2800");
+                Assert.That(result.Transactions.Count, Is.EqualTo(3), "Should include 3 transactions");
+
+                // Verify daily totals
+                Assert.That(result.DailyTotals.Count, Is.EqualTo(3), "Should have daily totals for 3 days");
+                Assert.That(result.DailyTotals.ContainsKey(3), Is.True, "Should contain day 3");
+                Assert.That(result.DailyTotals[3], Is.EqualTo(3000), "Day 3 total should be 3000");
+                Assert.That(result.DailyTotals.ContainsKey(11), Is.True, "Should contain day 11");
+                Assert.That(result.DailyTotals[11], Is.EqualTo(-120), "Day 11 total should be -120");
+                Assert.That(result.DailyTotals.ContainsKey(21), Is.True, "Should contain day 21");
+                Assert.That(result.DailyTotals[21], Is.EqualTo(-80), "Day 21 total should be -80");
+
+                // Verify category totals
+                Assert.That(result.CategoryTotals.Count, Is.EqualTo(2), "Should have category totals for 2 categories");
+                Assert.That(result.CategoryTotals.ContainsKey("Food"), Is.True, "Should contain Food category");
+                Assert.That(result.CategoryTotals["Food"], Is.EqualTo(-200), "Food category total should be -200");
+                Assert.That(result.CategoryTotals.ContainsKey("Salary"), Is.True, "Should contain Salary category");
+                Assert.That(result.CategoryTotals["Salary"], Is.EqualTo(3000), "Salary category total should be 3000");
+            });
+        }
+
+        [Test]
+        public async Task GetYearlySummaryAsync_ShouldReturnYearlySummary()
+        {
+            // Arrange
+            var year = DateTime.UtcNow.Year;
+            var category1 = new Category { CategoryID = Guid.NewGuid(), Name = "Housing", CreatedAt = DateTime.UtcNow };
+            var category2 = new Category { CategoryID = Guid.NewGuid(), Name = "Income", CreatedAt = DateTime.UtcNow };
+            var wallet = new Wallet { WalletID = Guid.NewGuid(), WalletName = "Test Wallet", Balance = 5000 };
+            var transactions = new List<Transaction>
+            {
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = 5000,
+                    TransactionDate = new DateTime(year, 1, 15), // January (Q1)
+                    Type = "income",
+                    Wallet = wallet,
+                    Category = category2,
+                    CategoryID = category2.CategoryID,
+                    WalletID = wallet.WalletID
+                },
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = -1000,
+                    TransactionDate = new DateTime(year, 2, 1), // February (Q1)
+                    Type = "expense",
+                    Wallet = wallet,
+                    Category = category1,
+                    CategoryID = category1.CategoryID,
+                    WalletID = wallet.WalletID
+                },
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = 4000,
+                    TransactionDate = new DateTime(year, 5, 10), // May (Q2)
+                    Type = "income",
+                    Wallet = wallet,
+                    Category = category2,
+                    CategoryID = category2.CategoryID,
+                    WalletID = wallet.WalletID
+                },
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = -1000,
+                    TransactionDate = new DateTime(year, 8, 15), // August (Q3)
+                    Type = "expense",
+                    Wallet = wallet,
+                    Category = category1,
+                    CategoryID = category1.CategoryID,
+                    WalletID = wallet.WalletID
+                },
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    Amount = -1000,
+                    TransactionDate = new DateTime(year, 11, 20), // November (Q4)
+                    Type = "expense",
+                    Wallet = wallet,
+                    Category = category1,
+                    CategoryID = category1.CategoryID,
+                    WalletID = wallet.WalletID
+                }
+            };
+
+            context.Categories.AddRange(category1, category2);
+            context.Wallets.Add(wallet);
+            context.Transactions.AddRange(transactions);
+            await context.SaveChangesAsync();
+
+            // Act
+            var result = await transactionRepository.GetYearlySummaryAsync(year);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.Year, Is.EqualTo(year), "Year should match");
+                Assert.That(result.TotalIncome, Is.EqualTo(9000), "Total income should be 5000 + 4000 = 9000");
+                Assert.That(result.TotalExpenses, Is.EqualTo(3000), "Total expenses should be 1000 + 1000 + 1000 = 3000");
+                Assert.That(result.NetCashFlow, Is.EqualTo(6000), "Net cash flow should be 9000 - 3000 = 6000");
+                Assert.That(result.Transactions.Count, Is.EqualTo(5), "Should include 5 transactions");
+
+                // Verify monthly totals
+                Assert.That(result.MonthlyTotals.Count, Is.EqualTo(5), "Should have monthly totals for 5 months");
+                Assert.That(result.MonthlyTotals.ContainsKey("January"), Is.True, "Should contain January");
+                Assert.That(result.MonthlyTotals["January"], Is.EqualTo(5000), "January total should be 5000");
+                Assert.That(result.MonthlyTotals.ContainsKey("February"), Is.True, "Should contain February");
+                Assert.That(result.MonthlyTotals["February"], Is.EqualTo(-1000), "February total should be -1000");
+                Assert.That(result.MonthlyTotals.ContainsKey("May"), Is.True, "Should contain May");
+                Assert.That(result.MonthlyTotals["May"], Is.EqualTo(4000), "May total should be 4000");
+
+                // Verify category totals
+                Assert.That(result.CategoryTotals.Count, Is.EqualTo(2), "Should have category totals for 2 categories");
+                Assert.That(result.CategoryTotals.ContainsKey("Housing"), Is.True, "Should contain Housing category");
+                Assert.That(result.CategoryTotals["Housing"], Is.EqualTo(-3000), "Housing category total should be -3000");
+                Assert.That(result.CategoryTotals.ContainsKey("Income"), Is.True, "Should contain Income category");
+                Assert.That(result.CategoryTotals["Income"], Is.EqualTo(9000), "Income category total should be 9000");
+
+                // Verify quarterly totals
+                Assert.That(result.QuarterlyTotals.Count, Is.EqualTo(4), "Should have totals for 4 quarters");
+                Assert.That(result.QuarterlyTotals["Q1"], Is.EqualTo(4000), "Q1 total should be 5000 - 1000 = 4000");
+                Assert.That(result.QuarterlyTotals["Q2"], Is.EqualTo(4000), "Q2 total should be 4000");
+                Assert.That(result.QuarterlyTotals["Q3"], Is.EqualTo(-1000), "Q3 total should be -1000");
+                Assert.That(result.QuarterlyTotals["Q4"], Is.EqualTo(-1000), "Q4 total should be -1000");
+            });
+        }
+
+        [Test]
+        public async Task GetWeeklySummaryAsync_WithNoTransactions_ShouldReturnEmptySummary()
+        {
+            // Arrange
+            var weekStartDate = DateTime.UtcNow.Date.AddDays(7); // Future week with no transactions
+
+            // Act
+            var result = await transactionRepository.GetWeeklySummaryAsync(weekStartDate);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.TotalIncome, Is.EqualTo(0), "Total income should be 0");
+                Assert.That(result.TotalExpenses, Is.EqualTo(0), "Total expenses should be 0");
+                Assert.That(result.NetCashFlow, Is.EqualTo(0), "Net cash flow should be 0");
+                Assert.That(result.Transactions, Is.Empty, "Transactions list should be empty");
+                Assert.That(result.DailyTotals, Is.Empty, "Daily totals should be empty");
+            });
+        }
+
+        [Test]
+        public async Task GetMonthlySummaryAsync_WithNoTransactions_ShouldReturnEmptySummary()
+        {
+            // Arrange
+            var futureMonth = DateTime.UtcNow.AddMonths(1); // Future month with no transactions
+            var monthDate = new DateTime(futureMonth.Year, futureMonth.Month, 1);
+
+            // Act
+            var result = await transactionRepository.GetMonthlySummaryAsync(monthDate);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.TotalIncome, Is.EqualTo(0), "Total income should be 0");
+                Assert.That(result.TotalExpenses, Is.EqualTo(0), "Total expenses should be 0");
+                Assert.That(result.NetCashFlow, Is.EqualTo(0), "Net cash flow should be 0");
+                Assert.That(result.Transactions, Is.Empty, "Transactions list should be empty");
+                Assert.That(result.DailyTotals, Is.Empty, "Daily totals should be empty");
+                Assert.That(result.CategoryTotals, Is.Empty, "Category totals should be empty");
+            });
+        }
+
+        [Test]
+        public async Task GetYearlySummaryAsync_WithNoTransactions_ShouldReturnEmptySummary()
+        {
+            // Arrange
+            var futureYear = DateTime.UtcNow.Year + 1; // Future year with no transactions
+
+            // Act
+            var result = await transactionRepository.GetYearlySummaryAsync(futureYear);
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.Not.Null, "Result should not be null");
+                Assert.That(result.TotalIncome, Is.EqualTo(0), "Total income should be 0");
+                Assert.That(result.TotalExpenses, Is.EqualTo(0), "Total expenses should be 0");
+                Assert.That(result.NetCashFlow, Is.EqualTo(0), "Net cash flow should be 0");
+                Assert.That(result.Transactions, Is.Empty, "Transactions list should be empty");
+                Assert.That(result.MonthlyTotals, Is.Empty, "Monthly totals should be empty");
+                Assert.That(result.CategoryTotals, Is.Empty, "Category totals should be empty");
+                Assert.That(result.QuarterlyTotals["Q1"], Is.EqualTo(0), "Q1 total should be 0");
+                Assert.That(result.QuarterlyTotals["Q2"], Is.EqualTo(0), "Q2 total should be 0");
+                Assert.That(result.QuarterlyTotals["Q3"], Is.EqualTo(0), "Q3 total should be 0");
+                Assert.That(result.QuarterlyTotals["Q4"], Is.EqualTo(0), "Q4 total should be 0");
+            });
+        }
+
     }
+
 }

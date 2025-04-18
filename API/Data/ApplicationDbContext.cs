@@ -49,6 +49,15 @@ namespace API.Data
             modelBuilder.Entity<Transaction>()
                 .HasIndex(t => t.Type)
                 .HasDatabaseName("IX_Transaction_Type");
+            modelBuilder.Entity<Wallet>()
+               .HasIndex(w => w.UserId)
+               .HasDatabaseName("IX_Wallet_UserId");
+
+            modelBuilder.Entity<ApplicationUser>()
+                .HasMany(u => u.Wallets)
+                .WithOne(w => w.User)
+                .HasForeignKey(w => w.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Transaction>()
                .Property(t => t.Type)

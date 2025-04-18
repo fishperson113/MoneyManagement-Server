@@ -32,6 +32,9 @@ namespace API.Repositories
             string? timeRange = null, string? dayOfWeek = null);
 
         Task<DailySummaryDTO> GetDailySummaryAsync(DateTime date);
+        Task<WeeklySummaryDTO> GetWeeklySummaryAsync(DateTime weekStartDate);
+        Task<MonthlySummaryDTO> GetMonthlySummaryAsync(DateTime yearMonth);
+        Task<YearlySummaryDTO> GetYearlySummaryAsync(int year);
 
         Task<ReportInfoDTO> GenerateReportAsync(
             DateTime startDate, DateTime endDate, string? type, string format,

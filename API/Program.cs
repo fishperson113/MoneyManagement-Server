@@ -63,6 +63,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddDefaultTokenProviders();
 
 builder.Services.AddIdentityApiEndpoints<ApplicationUser>();
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddAutoMapper(typeof(Program), typeof(ApplicationMapper));
 

@@ -2,10 +2,12 @@ using API.Data;
 using API.Models.DTOs;
 using API.Models.Entities;
 using AutoMapper;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace API.Repositories
@@ -15,14 +17,20 @@ namespace API.Repositories
         private readonly ApplicationDbContext _context;
         private readonly IMapper _mapper;
         private readonly ILogger<WalletRepository> _logger;
-
-        public WalletRepository(ApplicationDbContext context, IMapper mapper, ILogger<WalletRepository> logger)
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        public WalletRepository(ApplicationDbContext context, IMapper mapper, ILogger<WalletRepository> logger,
+        IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
             _mapper = mapper;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
-
+        private string GetCurrentUserId()
+        {
+            return _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? throw new UnauthorizedAccessException("User is not authenticated");
+        }
         public async Task<WalletDTO> CreateWalletAsync(CreateWalletDTO model)
         {
             try
@@ -31,6 +39,7 @@ namespace API.Repositories
 
                 var wallet = _mapper.Map<Wallet>(model);
                 wallet.WalletID = Guid.NewGuid();
+                wallet.UserId = GetCurrentUserId();
 
                 _context.Wallets.Add(wallet);
                 await _context.SaveChangesAsync();
@@ -51,14 +60,23 @@ namespace API.Repositories
             {
                 _logger.LogInformation("Updating wallet with ID: {WalletID}", model.WalletID);
 
-                var wallet = await _context.Wallets.FindAsync(model.WalletID);
+                var userId = GetCurrentUserId();
+                var wallet = await _context.Wallets
+                    .FirstOrDefaultAsync(w => w.WalletID == model.WalletID && w.UserId == userId);
+
                 if (wallet == null)
                 {
-                    _logger.LogWarning("Wallet with ID {WalletID} not found", model.WalletID);
-                    throw new KeyNotFoundException($"Wallet with ID {model.WalletID} not found.");
+                    _logger.LogWarning("Wallet with ID {WalletID} not found or doesn't belong to the current user", model.WalletID);
+                    throw new KeyNotFoundException($"Wallet with ID {model.WalletID} not found or access denied.");
                 }
 
+                // Store the original userId to preserve it
+                var originalUserId = wallet.UserId;
+
                 _mapper.Map(model, wallet);
+
+                // Don't allow changing the owner
+                wallet.UserId = originalUserId;
 
                 _context.Wallets.Update(wallet);
                 await _context.SaveChangesAsync();
@@ -79,11 +97,14 @@ namespace API.Repositories
             {
                 _logger.LogInformation("Deleting wallet with ID: {WalletID}", walletId);
 
-                var wallet = await _context.Wallets.FindAsync(walletId);
+                var userId = GetCurrentUserId();
+                var wallet = await _context.Wallets
+                    .FirstOrDefaultAsync(w => w.WalletID == walletId && w.UserId == userId);
+
                 if (wallet == null)
                 {
-                    _logger.LogWarning("Wallet with ID {WalletID} not found", walletId);
-                    throw new KeyNotFoundException($"Wallet with ID {walletId} not found.");
+                    _logger.LogWarning("Wallet with ID {WalletID} not found or doesn't belong to the current user", walletId);
+                    throw new KeyNotFoundException($"Wallet with ID {walletId} not found or access denied.");
                 }
 
                 _context.Wallets.Remove(wallet);
@@ -101,12 +122,16 @@ namespace API.Repositories
 
         public async Task<IEnumerable<WalletDTO>> GetAllWalletsAsync()
         {
-            _logger.LogInformation("Fetching all wallets from the database.");
+            _logger.LogInformation("Fetching wallets for the current user.");
 
             try
             {
-                var wallets = await _context.Wallets.ToListAsync();
-                _logger.LogInformation("Successfully retrieved {Count} wallets.", wallets.Count);
+                var userId = GetCurrentUserId();
+                var wallets = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .ToListAsync();
+
+                _logger.LogInformation("Successfully retrieved {Count} wallets for user {UserId}.", wallets.Count, userId);
 
                 return _mapper.Map<IEnumerable<WalletDTO>>(wallets);
             }
@@ -123,11 +148,13 @@ namespace API.Repositories
 
             try
             {
-                var wallet = await _context.Wallets.FindAsync(walletId);
+                var userId = GetCurrentUserId();
+                var wallet = await _context.Wallets
+                    .FirstOrDefaultAsync(w => w.WalletID == walletId && w.UserId == userId);
 
                 if (wallet == null)
                 {
-                    _logger.LogWarning("Wallet with ID {WalletID} not found.", walletId);
+                    _logger.LogWarning("Wallet with ID {WalletID} not found or doesn't belong to the current user.", walletId);
                     return null;
                 }
 
