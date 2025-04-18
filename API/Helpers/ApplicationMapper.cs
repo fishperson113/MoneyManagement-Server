@@ -121,6 +121,27 @@ namespace API.Helpers
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
+            CreateMap<Transaction, TransactionDetailDTO>()
+               .ForMember(dest => dest.TransactionID, opt => opt.MapFrom(src => src.TransactionID))
+               .ForMember(dest => dest.Date, opt => opt.MapFrom(src => src.TransactionDate.Date))
+               .ForMember(dest => dest.Time, opt => opt.MapFrom(src => src.TransactionDate.ToString("HH:mm:ss")))
+               .ForMember(dest => dest.DayOfWeek, opt => opt.MapFrom(src => src.TransactionDate.DayOfWeek.ToString()))
+               .ForMember(dest => dest.Month, opt => opt.MapFrom(src => src.TransactionDate.ToString("MMMM")))
+               .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
+               .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Amount < 0 ? "expense" : "income"))
+               .ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.Category.Name))
+               .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+               .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
+               .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.Wallet.WalletName));
+
+            // Simple self-mappings for DTOs that are created directly in the repository
+            CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
+            CreateMap<CashFlowSummaryDTO, CashFlowSummaryDTO>();
+            CreateMap<DailySummaryDTO, DailySummaryDTO>();
+            CreateMap<AggregateStatisticsDTO, AggregateStatisticsDTO>();
+            CreateMap<UpcomingBillDTO, UpcomingBillDTO>();
+            CreateMap<ReportInfoDTO, ReportInfoDTO>();
+            CreateMap<ReportInfoDTO, ReportInfoDTO>();
         }
 
     }
