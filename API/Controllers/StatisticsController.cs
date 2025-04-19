@@ -15,25 +15,6 @@ namespace API.Controllers
             _transactionRepository = transactionRepository;
         }
 
-        // GET: api/Statistics/aggregate?period=monthly&startDate=2025-01-01&endDate=2025-03-31&type=income
-        [HttpGet("aggregate")]
-        public async Task<IActionResult> GetAggregateStatistics(
-            [FromQuery] string period,
-            [FromQuery] DateTime startDate,
-            [FromQuery] DateTime endDate,
-            [FromQuery] string? type = null)
-        {
-            try
-            {
-                var statistics = await _transactionRepository.GetAggregateStatisticsAsync(period, startDate, endDate, type);
-                return Ok(statistics);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"An error occurred while retrieving aggregate statistics: {ex.Message}");
-            }
-        }
-
         // GET: api/Statistics/category-breakdown?startDate=2025-01-01&endDate=2025-01-31&type=expense
         [HttpGet("category-breakdown")]
         public async Task<IActionResult> GetCategoryBreakdown(

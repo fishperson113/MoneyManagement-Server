@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -17,19 +18,41 @@ namespace API.Repositories
         private readonly ApplicationDbContext _context;
         private readonly IMapper _mapper;
         private readonly ILogger<TransactionRepository> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public TransactionRepository(ApplicationDbContext context, IMapper mapper, ILogger<TransactionRepository> logger)
+        public TransactionRepository(
+            ApplicationDbContext context,
+            IMapper mapper,
+            ILogger<TransactionRepository> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
             _mapper = mapper;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
-
+        private string GetCurrentUserId()
+        {
+            return _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? throw new UnauthorizedAccessException("User is not authenticated");
+        }
         public async Task<TransactionDTO> CreateTransactionAsync(CreateTransactionDTO model)
         {
             try
             {
                 _logger.LogInformation("Starting transaction creation.");
+
+                var userId = GetCurrentUserId();
+
+                // Verify that the wallet belongs to the current user
+                var walletBelongsToUser = await _context.Wallets
+                    .AnyAsync(w => w.WalletID == model.WalletID && w.UserId == userId);
+
+                if (!walletBelongsToUser)
+                {
+                    _logger.LogWarning("Cannot create transaction for wallet {WalletID} as it doesn't belong to current user", model.WalletID);
+                    throw new UnauthorizedAccessException($"Cannot create transaction for wallet {model.WalletID} as it doesn't belong to current user");
+                }
 
                 var transaction = _mapper.Map<Transaction>(model);
                 transaction.TransactionID = Guid.NewGuid();
@@ -64,11 +87,28 @@ namespace API.Repositories
             {
                 _logger.LogInformation("Updating transaction with ID: {TransactionID}", model.TransactionID);
 
-                var transaction = await _context.Transactions.FindAsync(model.TransactionID);
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
+                var transaction = await _context.Transactions
+                    .FirstOrDefaultAsync(t => t.TransactionID == model.TransactionID && userWalletIds.Contains(t.WalletID));
+
                 if (transaction == null)
                 {
-                    _logger.LogWarning("Transaction with ID {TransactionID} not found", model.TransactionID);
-                    throw new KeyNotFoundException($"Transaction with ID {model.TransactionID} not found.");
+                    _logger.LogWarning("Transaction with ID {TransactionID} not found or doesn't belong to current user", model.TransactionID);
+                    throw new KeyNotFoundException($"Transaction with ID {model.TransactionID} not found or access denied.");
+                }
+
+                // Verify that the target wallet also belongs to the user if it's being changed
+                if (transaction.WalletID != model.WalletID && !userWalletIds.Contains(model.WalletID))
+                {
+                    _logger.LogWarning("Cannot move transaction to wallet {WalletID} as it doesn't belong to current user", model.WalletID);
+                    throw new UnauthorizedAccessException($"Cannot move transaction to wallet {model.WalletID} as it doesn't belong to current user");
                 }
 
                 _mapper.Map(model, transaction);
@@ -103,11 +143,21 @@ namespace API.Repositories
             {
                 _logger.LogInformation("Deleting transaction with ID: {TransactionID}", transactionId);
 
-                var transaction = await _context.Transactions.FindAsync(transactionId);
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
+                var transaction = await _context.Transactions
+                    .FirstOrDefaultAsync(t => t.TransactionID == transactionId && userWalletIds.Contains(t.WalletID));
+
                 if (transaction == null)
                 {
-                    _logger.LogWarning("Transaction with ID {TransactionID} not found", transactionId);
-                    throw new KeyNotFoundException($"Transaction with ID {transactionId} not found.");
+                    _logger.LogWarning("Transaction with ID {TransactionID} not found or doesn't belong to current user", transactionId);
+                    throw new KeyNotFoundException($"Transaction with ID {transactionId} not found or access denied.");
                 }
 
                 _context.Transactions.Remove(transaction);
@@ -125,12 +175,25 @@ namespace API.Repositories
 
         public async Task<IEnumerable<TransactionDTO>> GetAllTransactionsAsync()
         {
-            _logger.LogInformation("Fetching all transactions from the database.");
+            _logger.LogInformation("Fetching all transactions for the current user.");
 
             try
             {
-                var transactions = await _context.Transactions.ToListAsync();
-                _logger.LogInformation("Successfully retrieved {Count} transactions.", transactions.Count);
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
+                // Get transactions only from those wallets
+                var transactions = await _context.Transactions
+                    .Where(t => userWalletIds.Contains(t.WalletID))
+                    .ToListAsync();
+
+                _logger.LogInformation("Successfully retrieved {Count} transactions for user {UserId}.",
+                    transactions.Count, userId);
 
                 return _mapper.Map<IEnumerable<TransactionDTO>>(transactions);
             }
@@ -147,11 +210,20 @@ namespace API.Repositories
 
             try
             {
-                var transaction = await _context.Transactions.FindAsync(transactionId);
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
+                var transaction = await _context.Transactions
+                    .FirstOrDefaultAsync(t => t.TransactionID == transactionId && userWalletIds.Contains(t.WalletID));
 
                 if (transaction == null)
                 {
-                    _logger.LogWarning("Transaction with ID {TransactionID} not found.", transactionId);
+                    _logger.LogWarning("Transaction with ID {TransactionID} not found or doesn't belong to current user.", transactionId);
                     return null;
                 }
 
@@ -171,6 +243,18 @@ namespace API.Repositories
 
             try
             {
+                var userId = GetCurrentUserId();
+
+                // Verify that the wallet belongs to the current user
+                var walletBelongsToUser = await _context.Wallets
+                    .AnyAsync(w => w.WalletID == walletId && w.UserId == userId);
+
+                if (!walletBelongsToUser)
+                {
+                    _logger.LogWarning("Wallet with ID {WalletID} not found or doesn't belong to current user", walletId);
+                    throw new UnauthorizedAccessException($"Wallet with ID {walletId} not found or access denied");
+                }
+
                 var transactions = await _context.Transactions
                     .Where(t => t.WalletID == walletId)
                     .ToListAsync();
@@ -194,11 +278,17 @@ namespace API.Repositories
             try
             {
                 _logger.LogInformation("Fetching transactions for date range {StartDate} to {EndDate}", startDate, endDate);
-
+                var userId = GetCurrentUserId();
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
                 var query = _context.Transactions
-                    .Include(t => t.Category)
-                    .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startDate && t.TransactionDate <= endDate);
+                     .Include(t => t.Category)
+                     .Include(t => t.Wallet)
+                     .Where(t => t.TransactionDate >= startDate &&
+                            t.TransactionDate <= endDate &&
+                            userWalletIds.Contains(t.WalletID));
 
                 // Apply type filter (income/expense)
                 if (!string.IsNullOrEmpty(type))
@@ -248,95 +338,6 @@ namespace API.Repositories
             }
         }
 
-        public async Task<IEnumerable<AggregateStatisticsDTO>> GetAggregateStatisticsAsync(
-        string period, DateTime startDate, DateTime endDate, string? type = null)
-        {
-            try
-            {
-                _logger.LogInformation("Generating aggregate statistics for period {Period}, start: {Start}, end: {End}, type: {Type}",
-                    period, startDate, endDate, type);
-
-                var query = _context.Transactions
-                    .Where(t => t.TransactionDate >= startDate && t.TransactionDate <= endDate);
-
-                // Apply type filter (income/expense)
-                if (!string.IsNullOrEmpty(type))
-                {
-                    query = query.Where(t => t.Type.ToLower() == type.ToLower());
-                }
-
-                var transactions = await query.ToListAsync();
-                var result = new List<AggregateStatisticsDTO>();
-
-                // Group by the specified period and type
-                switch (period.ToLower())
-                {
-                    case "daily":
-                        result = transactions
-                            .GroupBy(t => new { t.TransactionDate.Date, Type = t.Type })
-                            .Select(g => new AggregateStatisticsDTO
-                            {
-                                Period = g.Key.Date.ToString("yyyy-MM-dd"),
-                                Total = g.Sum(t => t.Amount),
-                                Type = g.Key.Type
-                            })
-                            .ToList();
-                        break;
-
-                    case "weekly":
-                        result = transactions
-                            .GroupBy(t => new
-                            {
-                                Week = CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(
-                                    t.TransactionDate, CalendarWeekRule.FirstDay, DayOfWeek.Monday),
-                                Type = t.Type
-                            })
-                            .Select(g => new AggregateStatisticsDTO
-                            {
-                                Period = $"{startDate.Year}-W{g.Key.Week}",
-                                Total = g.Sum(t => t.Amount),
-                                Type = g.Key.Type
-                            })
-                            .ToList();
-                        break;
-
-                    case "monthly":
-                        result = transactions
-                            .GroupBy(t => new { t.TransactionDate.Year, t.TransactionDate.Month, Type = t.Type })
-                            .Select(g => new AggregateStatisticsDTO
-                            {
-                                Period = $"{g.Key.Year}-{g.Key.Month:D2}",
-                                Total = g.Sum(t => t.Amount),
-                                Type = g.Key.Type
-                            })
-                            .ToList();
-                        break;
-
-                    case "yearly":
-                        result = transactions
-                            .GroupBy(t => new { t.TransactionDate.Year, Type = t.Type })
-                            .Select(g => new AggregateStatisticsDTO
-                            {
-                                Period = g.Key.Year.ToString(),
-                                Total = g.Sum(t => t.Amount),
-                                Type = g.Key.Type
-                            })
-                            .ToList();
-                        break;
-
-                    default:
-                        throw new ArgumentException($"Invalid period: {period}. Use 'daily', 'weekly', 'monthly', or 'yearly'.");
-                }
-
-                return result.OrderBy(r => r.Period).ToList();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generating aggregate statistics");
-                throw;
-            }
-        }
-
         public async Task<IEnumerable<CategoryBreakdownDTO>> GetCategoryBreakdownAsync(
             DateTime startDate, DateTime endDate, string? type = null)
         {
@@ -345,9 +346,19 @@ namespace API.Repositories
                 _logger.LogInformation("Generating category breakdown for period {Start} to {End}, type: {Type}",
                     startDate, endDate, type);
 
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
                 var query = _context.Transactions
                     .Include(t => t.Category)
-                    .Where(t => t.TransactionDate >= startDate && t.TransactionDate <= endDate);
+                    .Where(t => t.TransactionDate >= startDate &&
+                           t.TransactionDate <= endDate &&
+                           userWalletIds.Contains(t.WalletID));
 
                 // Apply type filter (income/expense)
                 if (!string.IsNullOrEmpty(type))
@@ -388,8 +399,16 @@ namespace API.Repositories
             {
                 _logger.LogInformation("Generating cash flow summary for period {Start} to {End}", startDate, endDate);
 
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
                 var transactions = await _context.Transactions
-                    .Where(t => t.TransactionDate >= startDate && t.TransactionDate <= endDate)
+                    .Where(t => t.TransactionDate >= startDate && t.TransactionDate <= endDate && userWalletIds.Contains(t.WalletID))
                     .ToListAsync();
 
                 var totalIncome = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
@@ -409,6 +428,7 @@ namespace API.Repositories
             }
         }
 
+
         public async Task<IEnumerable<TransactionDetailDTO>> SearchTransactionsAsync(
             DateTime startDate, DateTime endDate, string? type = null,
             string? category = null, string? amountRange = null, string? keywords = null,
@@ -418,10 +438,20 @@ namespace API.Repositories
             {
                 _logger.LogInformation("Searching transactions with complex filters");
 
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
                 var query = _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startDate && t.TransactionDate <= endDate);
+                    .Where(t => t.TransactionDate >= startDate &&
+                           t.TransactionDate <= endDate &&
+                           userWalletIds.Contains(t.WalletID));
 
                 // Apply type filter (income/expense)
                 if (!string.IsNullOrEmpty(type))
@@ -503,13 +533,21 @@ namespace API.Repositories
             {
                 _logger.LogInformation("Generating daily summary for date {Date}", date);
 
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
                 var startOfDay = date.Date;
                 var endOfDay = startOfDay.AddDays(1).AddTicks(-1);
 
                 var transactions = await _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startOfDay && t.TransactionDate <= endOfDay)
+                    .Where(t => t.TransactionDate >= startOfDay && t.TransactionDate <= endOfDay && userWalletIds.Contains(t.WalletID))
                     .ToListAsync();
 
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
@@ -533,20 +571,28 @@ namespace API.Repositories
                 throw;
             }
         }
+
         public async Task<WeeklySummaryDTO> GetWeeklySummaryAsync(DateTime weekStartDate)
         {
             try
             {
                 _logger.LogInformation("Generating weekly summary for week starting {Date}", weekStartDate);
 
-                // Ensure we start at the beginning of the provided day
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
                 var startOfWeek = weekStartDate.Date;
                 var endOfWeek = startOfWeek.AddDays(7).AddTicks(-1);
 
                 var transactions = await _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startOfWeek && t.TransactionDate <= endOfWeek)
+                    .Where(t => t.TransactionDate >= startOfWeek && t.TransactionDate <= endOfWeek && userWalletIds.Contains(t.WalletID))
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
@@ -554,25 +600,12 @@ namespace API.Repositories
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
                 var netCashFlow = income - expenses;
 
-                // Calculate week number
                 var calendar = CultureInfo.CurrentCulture.Calendar;
-                var weekNumber = calendar.GetWeekOfYear(
-                    startOfWeek,
-                    CalendarWeekRule.FirstDay,
-                    DayOfWeek.Monday);
+                var weekNumber = calendar.GetWeekOfYear(startOfWeek, CalendarWeekRule.FirstDay, DayOfWeek.Monday);
 
-                // Calculate daily totals for the week - FIXED VERSION
-                var dailyTotals = new Dictionary<string, decimal>();
-
-                // Group by day of week directly to avoid overwriting
-                foreach (var transaction in transactions)
-                {
-                    var dayOfWeek = transaction.TransactionDate.DayOfWeek.ToString();
-                    if (dailyTotals.ContainsKey(dayOfWeek))
-                        dailyTotals[dayOfWeek] += transaction.Amount;
-                    else
-                        dailyTotals[dayOfWeek] = transaction.Amount;
-                }
+                var dailyTotals = transactions
+                    .GroupBy(t => t.TransactionDate.DayOfWeek.ToString())
+                    .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
 
                 var result = new WeeklySummaryDTO
                 {
@@ -596,21 +629,28 @@ namespace API.Repositories
             }
         }
 
+
         public async Task<MonthlySummaryDTO> GetMonthlySummaryAsync(DateTime yearMonth)
         {
             try
             {
                 _logger.LogInformation("Generating monthly summary for {Year}-{Month}", yearMonth.Year, yearMonth.Month);
 
-                // Start of the month
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
                 var startOfMonth = new DateTime(yearMonth.Year, yearMonth.Month, 1);
-                // End of the month
                 var endOfMonth = startOfMonth.AddMonths(1).AddTicks(-1);
 
                 var transactions = await _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startOfMonth && t.TransactionDate <= endOfMonth)
+                    .Where(t => t.TransactionDate >= startOfMonth && t.TransactionDate <= endOfMonth && userWalletIds.Contains(t.WalletID))
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
@@ -618,21 +658,13 @@ namespace API.Repositories
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
                 var netCashFlow = income - expenses;
 
-                // Calculate daily totals for the month
                 var dailyTotals = transactions
                     .GroupBy(t => t.TransactionDate.Day)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => g.Sum(t => t.Amount)
-                    );
+                    .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
 
-                // Calculate category totals for the month
                 var categoryTotals = transactions
                     .GroupBy(t => t.Category.Name)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => g.Sum(t => t.Amount)
-                    );
+                    .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
 
                 var result = new MonthlySummaryDTO
                 {
@@ -656,20 +688,28 @@ namespace API.Repositories
             }
         }
 
+
         public async Task<YearlySummaryDTO> GetYearlySummaryAsync(int year)
         {
             try
             {
                 _logger.LogInformation("Generating yearly summary for year {Year}", year);
 
-                // Start and end of the year
+                var userId = GetCurrentUserId();
+
+                // Get all wallets owned by the current user
+                var userWalletIds = await _context.Wallets
+                    .Where(w => w.UserId == userId)
+                    .Select(w => w.WalletID)
+                    .ToListAsync();
+
                 var startOfYear = new DateTime(year, 1, 1);
                 var endOfYear = new DateTime(year, 12, 31, 23, 59, 59, 999);
 
                 var transactions = await _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startOfYear && t.TransactionDate <= endOfYear)
+                    .Where(t => t.TransactionDate >= startOfYear && t.TransactionDate <= endOfYear && userWalletIds.Contains(t.WalletID))
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
@@ -677,23 +717,14 @@ namespace API.Repositories
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
                 var netCashFlow = income - expenses;
 
-                // Calculate monthly totals for the year
                 var monthlyTotals = transactions
-                    .GroupBy(t => new { Month = t.TransactionDate.Month, MonthName = t.TransactionDate.ToString("MMMM") })
-                    .ToDictionary(
-                        g => g.Key.MonthName,
-                        g => g.Sum(t => t.Amount)
-                    );
+                    .GroupBy(t => new { t.TransactionDate.Month, MonthName = t.TransactionDate.ToString("MMMM") })
+                    .ToDictionary(g => g.Key.MonthName, g => g.Sum(t => t.Amount));
 
-                // Calculate category totals for the year
                 var categoryTotals = transactions
                     .GroupBy(t => t.Category.Name)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => g.Sum(t => t.Amount)
-                    );
+                    .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
 
-                // Calculate quarterly totals
                 var quarterlyTotals = new Dictionary<string, decimal>
                 {
                     { "Q1", transactions.Where(t => t.TransactionDate.Month >= 1 && t.TransactionDate.Month <= 3).Sum(t => t.Amount) },
@@ -722,6 +753,7 @@ namespace API.Repositories
                 throw;
             }
         }
+
         //TODO
         public async Task<ReportInfoDTO> GenerateReportAsync(
             DateTime startDate, DateTime endDate, string? type, string format,

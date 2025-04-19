@@ -22,11 +22,12 @@ namespace API.Helpers
 
 
             // Category Mappings
-
             CreateMap<CategoryDTO, Category>()
                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
                .ForMember(dest => dest.CategoryID, opt => opt.MapFrom(src => src.CategoryID))
+               .ForMember(dest => dest.UserId, opt => opt.Ignore())
+               .ForMember(dest => dest.User, opt => opt.Ignore())
                .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             CreateMap<Category, CategoryDTO>()
@@ -37,7 +38,9 @@ namespace API.Helpers
             CreateMap<CreateCategoryDTO, Category>()
                 .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
-                .ForMember(dest => dest.CategoryID, opt => opt.Ignore())                          
+                .ForMember(dest => dest.CategoryID, opt => opt.Ignore())
+                .ForMember(dest => dest.UserId, opt => opt.Ignore())
+                .ForMember(dest => dest.User, opt => opt.Ignore())
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             CreateMap<UpdateCategoryDTO, Category>()

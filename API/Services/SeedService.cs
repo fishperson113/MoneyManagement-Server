@@ -93,20 +93,20 @@ public class SeedService
             var now = DateTime.Now;
             var expenseCategories = new List<Category>
             {
-                new Category { CategoryID = Guid.NewGuid(), Name = "Food & Dining", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Transportation", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Entertainment", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Housing", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Utilities", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Shopping", CreatedAt = now }
+                new Category { CategoryID = Guid.NewGuid(), Name = "Food & Dining", CreatedAt = now, UserId = testUser.Id },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Transportation", CreatedAt = now, UserId = testUser.Id },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Entertainment", CreatedAt = now, UserId = testUser.Id },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Housing", CreatedAt = now, UserId = testUser.Id },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Utilities", CreatedAt = now, UserId = testUser.Id },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Shopping", CreatedAt = now, UserId = testUser.Id }
             };
 
             var incomeCategories = new List<Category>
             {
-                new Category { CategoryID = Guid.NewGuid(), Name = "Salary", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Freelance", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Gifts", CreatedAt = now },
-                new Category { CategoryID = Guid.NewGuid(), Name = "Investments", CreatedAt = now }
+                new Category { CategoryID = Guid.NewGuid(), Name = "Salary", CreatedAt = now, UserId = testUser.Id },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Freelance", CreatedAt = now, UserId = testUser.Id },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Gifts", CreatedAt = now, UserId = testUser.Id },
+                new Category { CategoryID = Guid.NewGuid(), Name = "Investments", CreatedAt = now, UserId = testUser.Id }
             };
 
             await _dbContext.Categories.AddRangeAsync(expenseCategories);

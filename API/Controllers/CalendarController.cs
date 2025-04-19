@@ -91,19 +91,5 @@ namespace API.Controllers
             }
         }
 
-        // GET: api/Calendar/summary?date=2025-01-01 (keeping for backward compatibility)
-        [HttpGet("summary")]
-        public async Task<IActionResult> GetDailySummaryLegacy([FromQuery] DateTime date)
-        {
-            try
-            {
-                var summary = await _transactionRepository.GetDailySummaryAsync(date);
-                return Ok(summary);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"An error occurred while retrieving the daily summary: {ex.Message}");
-            }
-        }
     }
 }

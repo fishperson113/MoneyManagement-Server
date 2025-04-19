@@ -17,9 +17,6 @@ namespace API.Repositories
         DateTime startDate, DateTime endDate, string? type = null,
         string? category = null, string? timeRange = null, string? dayOfWeek = null);
 
-        Task<IEnumerable<AggregateStatisticsDTO>> GetAggregateStatisticsAsync(
-            string period, DateTime startDate, DateTime endDate, string? type = null);
-
         Task<IEnumerable<CategoryBreakdownDTO>> GetCategoryBreakdownAsync(
             DateTime startDate, DateTime endDate, string? type = null);
 

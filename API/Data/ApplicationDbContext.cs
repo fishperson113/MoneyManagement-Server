@@ -29,9 +29,9 @@ namespace API.Data
                 .HasIndex(c => c.Name)
                 .HasDatabaseName("IX_Category_Name");
 
-            //modelBuilder.Entity<Category>()
-            //    .HasIndex(c => c.Type)
-            //    .HasDatabaseName("IX_Category_Type");
+            modelBuilder.Entity<Category>()
+                .HasIndex(c => c.UserId)
+                .HasDatabaseName("IX_Category_UserId");
 
             // Indexes for Transaction
             modelBuilder.Entity<Transaction>()
@@ -58,7 +58,11 @@ namespace API.Data
                 .WithOne(w => w.User)
                 .HasForeignKey(w => w.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
-
+            modelBuilder.Entity<ApplicationUser>()
+               .HasMany(u => u.Categories)
+               .WithOne(c => c.User)
+               .HasForeignKey(c => c.UserId)
+               .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<Transaction>()
                .Property(t => t.Type)
                .HasMaxLength(20)
