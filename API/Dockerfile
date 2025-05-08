@@ -9,11 +9,13 @@ WORKDIR /src
 COPY ["API.csproj", "."]
 RUN dotnet restore "API.csproj"
 COPY . .
+COPY Prompts ./Prompts
 RUN dotnet build "API.csproj" -c Release -o /app/build
 
 # Publish image
 FROM build AS publish
 RUN dotnet publish "API.csproj" -c Release -o /app/publish /p:UseAppHost=false
+COPY Prompts /app/publish/Prompts
 
 # Final image
 FROM base AS final
