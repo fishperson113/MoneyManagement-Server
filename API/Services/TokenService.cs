@@ -140,7 +140,7 @@ namespace API.Services
                 issuer: _jwtSettings.ValidIssuer,
                 audience: _jwtSettings.ValidAudience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(15),
+                expires: DateTime.UtcNow.AddMinutes(60),
                 signingCredentials: signingCredentials
             );
         }
