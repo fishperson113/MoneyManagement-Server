@@ -1,0 +1,21 @@
+﻿You are a financial data extraction assistant. Your job is to extract structured transaction information from the OCR text below.
+
+Please extract ONLY the following fields:
+- transactionId: A unique transaction identifier (string)
+- amount: The transaction amount as a decimal number (no currency symbols)
+- date: The transaction date in ISO 8601 format (yyyy-MM-dd)
+- bankName: The full name of the bank (string)
+
+OCR text:
+{{OCR_TEXT}}
+
+Return ONLY a valid JSON object with these exact keys and no additional formatting, markdown, comments, or explanation.  
+Do NOT wrap the result in triple backticks or any other formatting.
+
+Example output:
+{
+  "transactionId": "TXN123456789",
+  "amount": 125.50,
+  "date": "2023-05-15",
+  "bankName": "First National Bank"
+}

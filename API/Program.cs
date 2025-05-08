@@ -64,6 +64,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 builder.Services.AddIdentityApiEndpoints<ApplicationUser>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 
 builder.Services.AddAutoMapper(typeof(Program), typeof(ApplicationMapper));
 
@@ -73,6 +74,7 @@ builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<SeedService>();
+builder.Services.AddScoped<GeminiService>();
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 
