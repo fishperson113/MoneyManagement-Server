@@ -19,12 +19,11 @@ namespace API.Controllers
         [HttpGet("category-breakdown")]
         public async Task<IActionResult> GetCategoryBreakdown(
             [FromQuery] DateTime startDate,
-            [FromQuery] DateTime endDate,
-            [FromQuery] string? type = null)
+            [FromQuery] DateTime endDate)
         {
             try
             {
-                var breakdown = await _transactionRepository.GetCategoryBreakdownAsync(startDate, endDate, type);
+                var breakdown = await _transactionRepository.GetCategoryBreakdownAsync(startDate, endDate);
                 return Ok(breakdown);
             }
             catch (Exception ex)

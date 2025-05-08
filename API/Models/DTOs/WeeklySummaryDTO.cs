@@ -11,6 +11,8 @@
         public decimal NetCashFlow { get; set; }
         public List<TransactionDetailDTO> Transactions { get; set; } = new List<TransactionDetailDTO>();
         public Dictionary<string, decimal> DailyTotals { get; set; } = new Dictionary<string, decimal>();
+        public Dictionary<string, decimal> DailyIncomeTotals { get; set; } = new();
+        public Dictionary<string, decimal> DailyExpenseTotals { get; set; } = new();
 
     }
 }

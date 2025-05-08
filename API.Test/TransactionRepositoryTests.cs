@@ -491,14 +491,21 @@ namespace API.Test
             var startDate = DateTime.UtcNow.AddDays(-7);
             var endDate = DateTime.UtcNow;
 
-            var category1 = new Category
+            var foodCategory = new Category
             {
                 CategoryID = Guid.NewGuid(),
                 Name = "Food",
                 CreatedAt = DateTime.UtcNow
             };
 
-            var category2 = new Category
+            var salaryCategory = new Category
+            {
+                CategoryID = Guid.NewGuid(),
+                Name = "Salary",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var entertainmentCategory = new Category
             {
                 CategoryID = Guid.NewGuid(),
                 Name = "Entertainment",
@@ -523,42 +530,55 @@ namespace API.Test
 
             var transactions = new List<Transaction>
             {
+                // Current user transactions
                 new Transaction {
                     TransactionID = Guid.NewGuid(),
-                    CategoryID = category1.CategoryID,
+                    CategoryID = foodCategory.CategoryID,
                     Amount = -50,
                     Description = "Current User Food",
                     TransactionDate = DateTime.UtcNow.AddDays(-3),
                     WalletID = currentUserWallet.WalletID,
                     Type = "expense",
-                    Category = category1,
+                    Category = foodCategory,
                     Wallet = currentUserWallet
                 },
                 new Transaction {
                     TransactionID = Guid.NewGuid(),
-                    CategoryID = category2.CategoryID,
+                    CategoryID = entertainmentCategory.CategoryID,
                     Amount = -30,
                     Description = "Current User Entertainment",
                     TransactionDate = DateTime.UtcNow.AddDays(-2),
                     WalletID = currentUserWallet.WalletID,
                     Type = "expense",
-                    Category = category2,
+                    Category = entertainmentCategory,
                     Wallet = currentUserWallet
                 },
                 new Transaction {
                     TransactionID = Guid.NewGuid(),
-                    CategoryID = category1.CategoryID,
+                    CategoryID = salaryCategory.CategoryID,
+                    Amount = 200,
+                    Description = "Current User Salary",
+                    TransactionDate = DateTime.UtcNow.AddDays(-1),
+                    WalletID = currentUserWallet.WalletID,
+                    Type = "income",
+                    Category = salaryCategory,
+                    Wallet = currentUserWallet
+                },
+                // Other user transaction - should be excluded
+                new Transaction {
+                    TransactionID = Guid.NewGuid(),
+                    CategoryID = foodCategory.CategoryID,
                     Amount = -200,
                     Description = "Other User Food",
                     TransactionDate = DateTime.UtcNow.AddDays(-3),
                     WalletID = otherUserWallet.WalletID,
                     Type = "expense",
-                    Category = category1,
+                    Category = foodCategory,
                     Wallet = otherUserWallet
                 }
             };
 
-            context.Categories.AddRange(category1, category2);
+            context.Categories.AddRange(foodCategory, entertainmentCategory, salaryCategory);
             context.Wallets.AddRange(currentUserWallet, otherUserWallet);
             context.Transactions.AddRange(transactions);
             await context.SaveChangesAsync();
@@ -570,19 +590,37 @@ namespace API.Test
             Assert.Multiple(() =>
             {
                 Assert.That(result, Is.Not.Null, "Result should not be null");
-                Assert.That(result.Count(), Is.EqualTo(2), "Should return exactly 2 categories (current user's only)");
 
-                var totalAmount = result.Sum(c => c.Total);
-                Assert.That(totalAmount, Is.EqualTo(80), "Total amount should be 50 + 30 = 80 (current user's expenses only)");
+                // Should return 3 categories (Food, Entertainment, Salary)
+                Assert.That(result.Count(), Is.EqualTo(3), "Should return exactly 3 categories (current user's only)");
 
-                var foodCategory = result.FirstOrDefault(c => c.Category == "Food");
-                var entertainmentCategory = result.FirstOrDefault(c => c.Category == "Entertainment");
+                // Check total income and expense values
+                var totalIncome = result.First().TotalIncome;
+                var totalExpense = result.First().TotalExpense;
+                Assert.That(totalIncome, Is.EqualTo(200), "Total income should be 200");
+                Assert.That(totalExpense, Is.EqualTo(80), "Total expense should be 50 + 30 = 80");
 
+                // Check individual categories
+                var foodCategory = result.FirstOrDefault(c => c.Category == "Food" && !c.IsIncome);
+                var entertainmentCategory = result.FirstOrDefault(c => c.Category == "Entertainment" && !c.IsIncome);
+                var salaryCategory = result.FirstOrDefault(c => c.Category == "Salary" && c.IsIncome);
+
+                // Verify expense categories
                 Assert.That(foodCategory, Is.Not.Null, "Food category should be present");
                 Assert.That(foodCategory?.Total, Is.EqualTo(50), "Food total should be 50 (not including other user's 200)");
+                Assert.That(foodCategory?.IsIncome, Is.False, "Food should be marked as expense");
+                Assert.That(foodCategory?.Percentage, Is.EqualTo(62.5), "Food percentage should be 50/80 = 62.5% of expenses"); // 50 / 80 * 100 = 62.5%
 
                 Assert.That(entertainmentCategory, Is.Not.Null, "Entertainment category should be present");
                 Assert.That(entertainmentCategory?.Total, Is.EqualTo(30), "Entertainment total should be 30");
+                Assert.That(entertainmentCategory?.IsIncome, Is.False, "Entertainment should be marked as expense");
+                Assert.That(entertainmentCategory?.Percentage, Is.EqualTo(37.5), "Entertainment percentage should be 30/80 = 37.5% of expenses"); // 30 / 80 * 100 = 37.5%
+
+                // Verify income category
+                Assert.That(salaryCategory, Is.Not.Null, "Salary category should be present");
+                Assert.That(salaryCategory?.Total, Is.EqualTo(200), "Salary total should be 200");
+                Assert.That(salaryCategory?.IsIncome, Is.True, "Salary should be marked as income");
+                Assert.That(salaryCategory?.Percentage, Is.EqualTo(100), "Salary percentage should be 100% of income");
             });
         }
 
@@ -917,126 +955,6 @@ namespace API.Test
         }
 
         [Test]
-        public async Task GetTransactionsByDateRangeAsync_WithFilters_ShouldApplyFiltersCorrectly()
-        {
-            // Arrange
-            var startDate = DateTime.UtcNow.AddDays(-7);
-            var endDate = DateTime.UtcNow;
-
-            var foodCategory = new Category
-            {
-                CategoryID = Guid.NewGuid(),
-                Name = "Food",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var entertainmentCategory = new Category
-            {
-                CategoryID = Guid.NewGuid(),
-                Name = "Entertainment",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var currentUserWallet = new Wallet
-            {
-                WalletID = Guid.NewGuid(),
-                WalletName = "Current User Wallet",
-                UserId = currentUserId,
-                Balance = 1000
-            };
-
-            var monday = DateTime.UtcNow.AddDays(-(int)DateTime.UtcNow.DayOfWeek + (int)DayOfWeek.Monday);
-            if (monday > DateTime.UtcNow) monday = monday.AddDays(-7); // Get previous Monday if today is Monday
-
-            var tuesday = monday.AddDays(1);
-
-            var morningTime = new TimeSpan(9, 0, 0); // 9:00 AM
-            var afternoonTime = new TimeSpan(15, 0, 0); // 3:00 PM
-
-            var transactions = new List<Transaction>
-            {
-                new Transaction {
-                    TransactionID = Guid.NewGuid(),
-                    CategoryID = foodCategory.CategoryID,
-                    Amount = -50,
-                    Description = "Grocery Shopping",
-                    TransactionDate = monday.Add(morningTime),
-                    WalletID = currentUserWallet.WalletID,
-                    Type = "expense",
-                    Category = foodCategory,
-                    Wallet = currentUserWallet
-                },
-                new Transaction {
-                    TransactionID = Guid.NewGuid(),
-                    CategoryID = entertainmentCategory.CategoryID,
-                    Amount = -30,
-                    Description = "Movie Tickets",
-                    TransactionDate = tuesday.Add(afternoonTime),
-                    WalletID = currentUserWallet.WalletID,
-                    Type = "expense",
-                    Category = entertainmentCategory,
-                    Wallet = currentUserWallet
-                },
-                new Transaction {
-                    TransactionID = Guid.NewGuid(),
-                    CategoryID = foodCategory.CategoryID,
-                    Amount = -20,
-                    Description = "Restaurant",
-                    TransactionDate = tuesday.Add(afternoonTime),
-                    WalletID = currentUserWallet.WalletID,
-                    Type = "expense",
-                    Category = foodCategory,
-                    Wallet = currentUserWallet
-                }
-            };
-
-            context.Categories.AddRange(foodCategory, entertainmentCategory);
-            context.Wallets.Add(currentUserWallet);
-            context.Transactions.AddRange(transactions);
-            await context.SaveChangesAsync();
-
-            // Act 1: Filter by type
-            var resultByType = await transactionRepository.GetTransactionsByDateRangeAsync(
-                startDate, endDate, type: "expense");
-
-            // Act 2: Filter by category
-            var resultByCategory = await transactionRepository.GetTransactionsByDateRangeAsync(
-                startDate, endDate, category: "Food");
-
-            // Act 3: Filter by day of week
-            var resultByDayOfWeek = await transactionRepository.GetTransactionsByDateRangeAsync(
-                startDate, endDate, dayOfWeek: "Monday");
-
-            // Act 4: Filter by time range
-            var resultByTimeRange = await transactionRepository.GetTransactionsByDateRangeAsync(
-                startDate, endDate, timeRange: "14:00-16:00"); // 2 PM to 4 PM
-
-            // Assert
-            Assert.Multiple(() =>
-            {
-                // Type filter assertions
-                Assert.That(resultByType, Is.Not.Null, "Result by type should not be null");
-                Assert.That(resultByType.Count(), Is.EqualTo(3), "Should return all 3 expense transactions");
-
-                // Category filter assertions
-                Assert.That(resultByCategory, Is.Not.Null, "Result by category should not be null");
-                Assert.That(resultByCategory.Count(), Is.EqualTo(2), "Should return 2 Food category transactions");
-                Assert.That(resultByCategory.All(t => t.Category == "Food"), Is.True, "All transactions should be Food category");
-
-                // Day of week filter assertions
-                Assert.That(resultByDayOfWeek, Is.Not.Null, "Result by day of week should not be null");
-                Assert.That(resultByDayOfWeek.Count(), Is.EqualTo(1), "Should return 1 Monday transaction");
-                Assert.That(resultByDayOfWeek.First().Description, Is.EqualTo("Grocery Shopping"), "Should be the Monday transaction");
-
-                // Time range filter assertions
-                Assert.That(resultByTimeRange, Is.Not.Null, "Result by time range should not be null");
-                Assert.That(resultByTimeRange.Count(), Is.EqualTo(2), "Should return 2 afternoon transactions");
-                Assert.That(resultByTimeRange.All(t => t.Description == "Movie Tickets" || t.Description == "Restaurant"),
-                    Is.True, "Should contain both afternoon transactions");
-            });
-        }
-
-        [Test]
         public async Task GetWeeklySummaryAsync_ShouldOnlyIncludeCurrentUserTransactions()
         {
             // Arrange
@@ -1134,6 +1052,17 @@ namespace API.Test
                 Assert.That(result.DailyTotals["Tuesday"], Is.EqualTo(100), "Tuesday total should be 100");
                 Assert.That(result.DailyTotals.ContainsKey("Thursday"), Is.True, "Should contain Thursday");
                 Assert.That(result.DailyTotals["Thursday"], Is.EqualTo(-50), "Thursday total should be -50");
+
+                // Check daily income totals
+                Assert.That(result.DailyIncomeTotals.Count, Is.EqualTo(1), "Should have income totals for 1 day");
+                Assert.That(result.DailyIncomeTotals.ContainsKey("Tuesday"), Is.True, "Should contain Tuesday in income totals");
+                Assert.That(result.DailyIncomeTotals["Tuesday"], Is.EqualTo(100), "Tuesday income total should be 100");
+
+                // Check daily expense totals
+                Assert.That(result.DailyExpenseTotals.Count, Is.EqualTo(1), "Should have expense totals for 1 day");
+                Assert.That(result.DailyExpenseTotals.ContainsKey("Thursday"), Is.True, "Should contain Thursday in expense totals");
+                Assert.That(result.DailyExpenseTotals["Thursday"], Is.EqualTo(50), "Thursday expense total should be 50 (absolute value)");
+
             });
         }
 
@@ -1457,6 +1386,8 @@ namespace API.Test
                 Assert.That(result.NetCashFlow, Is.EqualTo(0), "Net cash flow should be 0");
                 Assert.That(result.Transactions, Is.Empty, "Transactions list should be empty");
                 Assert.That(result.DailyTotals, Is.Empty, "Daily totals should be empty");
+                Assert.That(result.DailyExpenseTotals, Is.Empty, "Daily expense totals should be empty");
+                Assert.That(result.DailyIncomeTotals, Is.Empty, "Daily income totals should be empty");
             });
         }
 

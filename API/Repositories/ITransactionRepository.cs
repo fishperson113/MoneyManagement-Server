@@ -18,7 +18,7 @@ namespace API.Repositories
         string? category = null, string? timeRange = null, string? dayOfWeek = null);
 
         Task<IEnumerable<CategoryBreakdownDTO>> GetCategoryBreakdownAsync(
-            DateTime startDate, DateTime endDate, string? type = null);
+            DateTime startDate, DateTime endDate);
 
         Task<CashFlowSummaryDTO> GetCashFlowSummaryAsync(
             DateTime startDate, DateTime endDate);
