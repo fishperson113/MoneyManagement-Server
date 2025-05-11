@@ -84,7 +84,7 @@ builder.Services.AddScoped<GeminiService>();
 builder.Services.ConfigureFirebase(builder.Configuration);
 builder.Services.AddScoped<MessageRepository>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
-//builder.Services.AddSignalR();
+builder.Services.AddSignalR();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -103,21 +103,21 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = builder.Configuration["JWT:ValidIssuer"] ?? throw new ArgumentNullException("JWT:ValidIssuer"),
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:Secret"] ?? throw new ArgumentNullException("JWT:Secret")))
     };
-    //options.Events = new JwtBearerEvents
-    //{
-    //    OnMessageReceived = context =>
-    //    {
-    //        var accessToken = context.Request.Query["access_token"];
-    //        var path = context.HttpContext.Request.Path;
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
 
-    //        if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))
-    //        {
-    //            context.Token = accessToken;
-    //        }
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))
+            {
+                context.Token = accessToken;
+            }
 
-    //        return Task.CompletedTask;
-    //    }
-    //};
+            return Task.CompletedTask;
+        }
+    };
 });
 
 var app = builder.Build();
@@ -156,8 +156,8 @@ app.Use(async (context, next) =>
     await next();
 });
 app.MapGet("/ping", () => "pong");
-//app.MapHub<ChatHub>("/hubs/chat");
-//app.UseStaticFiles();
+app.MapHub<ChatHub>("/hubs/chat");
+app.UseStaticFiles();
 app.UseRouting();
 app.MapIdentityApi<ApplicationUser>().RequireAuthorization();
 
