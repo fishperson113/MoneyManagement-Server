@@ -24,17 +24,17 @@ jobs:
           mkdir -p secrets
 
           cat > secrets/firebase.json << 'EOF'
-            ${{ secrets.FIREBASE_CREDENTIAL_JSON }}
-            EOF
+          ${{ secrets.FIREBASE_CREDENTIAL_JSON }}
+          EOF
 
           chmod 600 secrets/firebase.json
 
 
           cat > .env << 'EOF'
-            GEMINI_KEY=${{ secrets.GEMINI_KEY }}
-            FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
-            FIREBASE_CREDENTIAL_PATH=/app/secrets/firebase.json
-            EOF
+          GEMINI_KEY=${{ secrets.GEMINI_KEY }}
+          FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CREDENTIAL_PATH=/app/secrets/firebase.json
+          EOF
 
           git fetch origin
           git checkout main
