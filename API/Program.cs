@@ -157,8 +157,8 @@ app.Use(async (context, next) =>
 });
 app.MapGet("/ping", () => "pong");
 app.MapHub<ChatHub>("/hubs/chat");
-app.UseStaticFiles();
-app.UseRouting();
+//app.UseStaticFiles();
+//app.UseRouting();
 app.MapIdentityApi<ApplicationUser>().RequireAuthorization();
 
 //app.UseHttpsRedirection();
