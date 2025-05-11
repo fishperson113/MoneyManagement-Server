@@ -16,8 +16,7 @@ services:
         - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
 
     volumes:
-      - ./Secrets/moneymanagementliveserver-firebase-adminsdk-fbsvc-4032d3722c.json:/run/Secrets/moneymanagementliveserver-firebase-adminsdk-fbsvc-4032d3722c.json:ro
-
+      - ./secrets/firebase.json:/app/secrets/firebase.json:ro
     networks:
         - productnetwork
     restart: on-failure
