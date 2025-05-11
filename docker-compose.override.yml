@@ -11,3 +11,4 @@ services:
       - ${APPDATA}/Microsoft/UserSecrets:/root/.microsoft/usersecrets:ro
       - ${APPDATA}/ASP.NET/Https:/home/app/.aspnet/https:ro
       - ${APPDATA}/ASP.NET/Https:/root/.aspnet/https:ro
+      - ./Secrets/moneymanagementliveserver-firebase-adminsdk-fbsvc-4032d3722c.json:/run/Secrets/moneymanagementliveserver-firebase-adminsdk-fbsvc-4032d3722c.json:ro

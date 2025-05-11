@@ -119,6 +119,17 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy
+            .WithOrigins("http://143.198.208.227") // 👈 Đặt đúng origin client
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials(); // Cho phép gửi cookie/token
+    });
+});
 
 var app = builder.Build();
 
@@ -159,6 +170,8 @@ app.MapGet("/ping", () => "pong");
 app.MapHub<ChatHub>("/hubs/chat");
 app.UseStaticFiles();
 app.UseRouting();
+app.UseCors();
+
 app.MapIdentityApi<ApplicationUser>().RequireAuthorization();
 
 //app.UseHttpsRedirection();

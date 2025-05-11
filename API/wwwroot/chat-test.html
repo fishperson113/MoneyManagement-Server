@@ -23,7 +23,7 @@
     
     <script>
         const connection = new signalR.HubConnectionBuilder()
-            .withUrl("http://localhost:5000/hubs/chat", {
+            .withUrl("http://143.198.208.227:5000/hubs/chat", {
                 accessTokenFactory: () => document.getElementById("tokenInput").value
             })
             .configureLogging(signalR.LogLevel.Information)
