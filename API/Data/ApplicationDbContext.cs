@@ -97,13 +97,13 @@ namespace API.Data
 
             modelBuilder.Entity<Message>()
                 .HasOne(m => m.Sender)
-                .WithMany()
+                .WithMany(u => u.MessagesSent)
                 .HasForeignKey(m => m.SenderId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Message>()
                 .HasOne(m => m.Receiver)
-                .WithMany()
+                .WithMany(u => u.MessagesReceived)
                 .HasForeignKey(m => m.ReceiverId)
                 .OnDelete(DeleteBehavior.Restrict);
         }

@@ -148,6 +148,25 @@ namespace API.Helpers
                .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
                .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.Wallet.WalletName));
 
+            // Message Mappings
+            CreateMap<Message, MessageDTO>()
+                .ForMember(dest => dest.MessageID, opt => opt.MapFrom(src => src.MessageID))
+                .ForMember(dest => dest.SenderId, opt => opt.MapFrom(src => src.SenderId))
+                .ForMember(dest => dest.ReceiverId, opt => opt.MapFrom(src => src.ReceiverId))
+                .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
+                .ForMember(dest => dest.SentAt, opt => opt.MapFrom(src => src.SentAt))
+                .ForMember(dest => dest.SenderName, opt => opt.MapFrom(src => $"{src.Sender.FirstName} {src.Sender.LastName}"))
+                .ForMember(dest => dest.ReceiverName, opt => opt.MapFrom(src => $"{src.Receiver.FirstName} {src.Receiver.LastName}"));
+
+            CreateMap<SendMessageDto, Message>()
+                .ForMember(dest => dest.MessageID, opt => opt.Ignore())
+                .ForMember(dest => dest.SenderId, opt => opt.Ignore())
+                .ForMember(dest => dest.ReceiverId, opt => opt.MapFrom(src => src.ReceiverId))
+                .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
+                .ForMember(dest => dest.SentAt, opt => opt.Ignore())
+                .ForMember(dest => dest.Sender, opt => opt.Ignore())
+                .ForMember(dest => dest.Receiver, opt => opt.Ignore());
+
             // Simple self-mappings for DTOs that are created directly in the repository
             CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
             CreateMap<CashFlowSummaryDTO, CashFlowSummaryDTO>();

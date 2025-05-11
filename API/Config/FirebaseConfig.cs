@@ -10,21 +10,23 @@ namespace API.Config
     {
         public static IServiceCollection ConfigureFirebase(this IServiceCollection services, IConfiguration configuration)
         {
-            // 1. Lấy JSON credential từ biến môi trường
-            var jsonCred = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIAL_JSON");
-            if (string.IsNullOrEmpty(jsonCred))
-                throw new InvalidOperationException("Missing FIREBASE_CREDENTIAL_JSON env var");
+            var path = Environment.GetEnvironmentVariable("FIREBASE_CREDENTIAL_PATH");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                throw new InvalidOperationException("Missing or invalid FIREBASE_CREDENTIAL_PATH env var");
 
-            var credential = GoogleCredential.FromJson(jsonCred);
+            var credential = GoogleCredential.FromFile(path);
 
-            // 2. Khởi tạo Firestore client
+            var projectId = Environment.GetEnvironmentVariable("FIREBASE_PROJECT_ID")
+                            ?? configuration["Firebase:ProjectId"];
+
             var clientBuilder = new FirestoreClientBuilder { Credential = credential };
             var client = clientBuilder.Build();
-            var firestoreDb = FirestoreDb.Create(configuration["Firebase:ProjectId"], client);
+            var firestoreDb = FirestoreDb.Create(projectId, client);
 
             services.AddSingleton(firestoreDb);
 
             return services;
         }
+
     }
 }

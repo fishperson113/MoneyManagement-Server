@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Authorization;
 using API.Helpers;
 using API.Models.Entities;
 using AutoMapper;
+using API.Data;
+using Microsoft.EntityFrameworkCore;
 namespace API.Controllers
 {
     [Route("api/[controller]")]
@@ -78,6 +80,23 @@ namespace API.Controllers
             {
                 return StatusCode(500, new { Success = false, Message = ex });
             }
+        }
+
+        [HttpGet("users")]
+        [Authorize(Roles = AppRole.Admin)] // hoặc bỏ Authorize nếu bạn muốn public
+        public async Task<IActionResult> GetAllUsers([FromServices] ApplicationDbContext dbContext)
+        {
+            var users = await dbContext.Users
+                .Select(u => new
+                {
+                    u.Id,
+                    u.UserName,
+                    u.FirstName,
+                    u.LastName
+                })
+                .ToListAsync();
+
+            return Ok(users);
         }
     }
 }

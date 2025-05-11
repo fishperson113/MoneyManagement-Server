@@ -11,6 +11,9 @@ using API.Services;
 using System.Security.Cryptography.X509Certificates;
 using API.Helpers;
 using Microsoft.Extensions.DependencyInjection;
+using API.Config;
+using API.Hub;
+using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,6 +51,9 @@ builder.Services.AddSwaggerGen(option =>
             new string[]{}
         }
     });
+    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    option.IncludeXmlComments(xmlPath);
 });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -75,8 +81,10 @@ builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<SeedService>();
 builder.Services.AddScoped<GeminiService>();
-
+builder.Services.ConfigureFirebase(builder.Configuration);
+builder.Services.AddScoped<MessageRepository>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
+builder.Services.AddSignalR();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -94,6 +102,21 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = builder.Configuration["JWT:ValidAudience"] ?? throw new ArgumentNullException("JWT:ValidAudience"),
         ValidIssuer = builder.Configuration["JWT:ValidIssuer"] ?? throw new ArgumentNullException("JWT:ValidIssuer"),
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:Secret"] ?? throw new ArgumentNullException("JWT:Secret")))
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -133,8 +156,9 @@ app.Use(async (context, next) =>
     await next();
 });
 app.MapGet("/ping", () => "pong");
-
-
+app.MapHub<ChatHub>("/hubs/chat");
+app.UseStaticFiles();
+app.UseRouting();
 app.MapIdentityApi<ApplicationUser>().RequireAuthorization();
 
 //app.UseHttpsRedirection();

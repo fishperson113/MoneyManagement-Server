@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Test Client</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.js"></script>
+</head>
+<body>
+    <div>
+        <input type="text" id="userIdInput" placeholder="Your User ID">
+        <input type="text" id="receiverIdInput" placeholder="Receiver ID">
+        <input type="text" id="messageInput" placeholder="Type a message">
+        <button id="sendButton">Send</button>
+        <input type="text" id="tokenInput" placeholder="JWT Token" style="width: 400px;">
+    </div>
+    <div>
+        <h3>Messages:</h3>
+        <ul id="messages"></ul>
+    </div>
+    <div>
+        <h3>Events:</h3>
+        <ul id="events"></ul>
+    </div>
+    
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("http://localhost:5000/hubs/chat", {
+                accessTokenFactory: () => document.getElementById("tokenInput").value
+            })
+            .configureLogging(signalR.LogLevel.Information)
+            .withAutomaticReconnect()
+            .build();
+
+        // Start connection
+        async function startConnection() {
+            try {
+                await connection.start();
+                addEvent("Connected to SignalR hub!");
+                
+                // Join user group when connected
+                const userId = document.getElementById("userIdInput").value;
+                if (userId) {
+                    await connection.invoke("JoinUserGroup", userId);
+                    addEvent(`Joined group for user ${userId}`);
+                }
+            } catch (err) {
+                addEvent(`Connection failed: ${err}`);
+                setTimeout(startConnection, 5000);
+            }
+        }
+
+        // Handle receiving messages
+        connection.on("ReceiveMessage", (message) => {
+            addMessage(`(${message.sentAt}) ${message.senderName}: ${message.content}`);
+        });
+
+        // Handle user status
+        connection.on("UserOnline", (userId) => {
+            addEvent(`User online: ${userId}`);
+        });
+
+        connection.on("UserOffline", (userId) => {
+            addEvent(`User offline: ${userId}`);
+        });
+
+        // Handle message read receipts
+        connection.on("MessageRead", (messageId, userId) => {
+            addEvent(`Message ${messageId} read by ${userId}`);
+        });
+
+        // Send message button
+        document.getElementById("sendButton").addEventListener("click", async () => {
+            const receiverId = document.getElementById("receiverIdInput").value;
+            const content = document.getElementById("messageInput").value;
+            
+            if (receiverId && content) {
+                try {
+                    await connection.invoke("SendMessageToUser", receiverId, {
+                        receiverId: receiverId,
+                        content: content
+                    });
+                    document.getElementById("messageInput").value = "";
+                } catch (err) {
+                    addEvent(`Error sending message: ${err}`);
+                }
+            }
+        });
+
+        function addMessage(message) {
+            const li = document.createElement("li");
+            li.textContent = message;
+            document.getElementById("messages").appendChild(li);
+        }
+
+        function addEvent(event) {
+            const li = document.createElement("li");
+            li.textContent = event;
+            document.getElementById("events").appendChild(li);
+        }
+
+        // Start the connection
+        document.getElementById("tokenInput").addEventListener("change", startConnection);
+    </script>
+</body>
+</html>
