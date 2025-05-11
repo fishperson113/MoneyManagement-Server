@@ -1,4 +1,4 @@
-name: Deploy .NET Core Application
+﻿name: Deploy .NET Core Application
 on:
   workflow_run:
     workflows: [".NET Core Desktop"]  # Replace with your CI workflow name
@@ -20,6 +20,22 @@ jobs:
         script: |
           set -e  # Exit on error
           cd /${{ secrets.SSH_USERNAME }}/MoneyManagement-Server
+          rm -f .env
+          mkdir -p secrets
+
+          cat > secrets/firebase.json << 'EOF'
+            ${{ secrets.FIREBASE_CREDENTIAL_JSON }}
+            EOF
+
+          chmod 600 secrets/firebase.json
+
+
+          cat > .env << 'EOF'
+            GEMINI_KEY=${{ secrets.GEMINI_KEY }}
+            FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
+            FIREBASE_CREDENTIAL_PATH=/app/secrets/firebase.json
+            EOF
+
           git fetch origin
           git checkout main
           git pull origin main

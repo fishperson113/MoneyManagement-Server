@@ -18,7 +18,9 @@ namespace API.Services
             ILogger<GeminiService> logger)
         {
             _httpClient = httpClientFactory.CreateClient();
-            _geminiApiKey = configuration["GeminiAI:ApiKey"] ?? "AIzaSyAuI2Tytg1VRU9EWejG-CIvz0NvZFdk5_I";
+            _geminiApiKey = Environment.GetEnvironmentVariable("GEMINI_KEY")
+                                 ?? configuration["GeminiAI:ApiKey"]
+                                 ?? throw new InvalidOperationException("Gemini API key not configured");
             _geminiApiUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_geminiApiKey}";
             _environment = environment;
             _logger = logger;

@@ -10,6 +10,14 @@ services:
     environment:
         - ASPNETCORE_ENVIRONMENT=Development
         - ASPNETCORE_URLS=http://+:5000
+        
+        - GEMINI_KEY=${GEMINI_KEY}
+        - FIREBASE_CREDENTIAL_PATH=${FIREBASE_CREDENTIAL_PATH}
+        - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+
+    volumes:
+      - ./Secrets/moneymanagementliveserver-firebase-adminsdk-fbsvc-4032d3722c.json:/run/Secrets/moneymanagementliveserver-firebase-adminsdk-fbsvc-4032d3722c.json:ro
+
     networks:
         - productnetwork
     restart: on-failure
