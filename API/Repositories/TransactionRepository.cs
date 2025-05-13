@@ -448,6 +448,8 @@ namespace API.Repositories
                     .Select(w => w.WalletID)
                     .ToListAsync();
 
+                endDate = endDate.Date.AddDays(1).AddMilliseconds(-1);
+
                 var query = _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)

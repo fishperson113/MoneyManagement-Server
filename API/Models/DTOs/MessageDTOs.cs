@@ -20,8 +20,6 @@
     public class ChatHistoryDTO
     {
         public required string ChatId { get; set; }
-        public required string OtherUserId { get; set; }
-        public required string OtherUserName { get; set; }
         public List<MessageDTO>? Messages { get; set; }
     }
 }
