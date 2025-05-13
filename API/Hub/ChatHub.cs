@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using API.Models.DTOs;
 using API.Repositories;
 using API.Models.Entities;
+using System.Collections.Concurrent;
 
 namespace API.Hub
 {
@@ -10,12 +11,18 @@ namespace API.Hub
     {
         private readonly ILogger<ChatHub> _logger;
         private readonly MessageRepository _messageRepository;
+        private readonly FriendRepository _friendRepository;
 
-        public ChatHub(ILogger<ChatHub> logger, MessageRepository messageRepository)
+        // Track online users and their connection IDs
+        private static readonly ConcurrentDictionary<string, HashSet<string>> OnlineUsers = new();
+
+        public ChatHub(ILogger<ChatHub> logger, MessageRepository messageRepository, FriendRepository friendRepository)
         {
             _logger = logger;
             _messageRepository = messageRepository;
+            _friendRepository = friendRepository;
         }
+
         // Sends a real-time message to a specific user
         // Also persists the message via repository
         // Notifies both sender and receiver
@@ -33,8 +40,20 @@ namespace API.Hub
                 // Use the repository to save the message
                 var message = await _messageRepository.SendMessageAsync(senderId, messageDto);
 
-                // Send to specific user through SignalR
-                await Clients.User(receiverId).ReceiveMessage(message);
+                // Check if receiver is online
+                var isReceiverOnline = OnlineUsers.ContainsKey(receiverId);
+
+                // Send to specific user through SignalR if they're online
+                if (isReceiverOnline)
+                {
+                    await Clients.User(receiverId).ReceiveMessage(message);
+                }
+                else
+                {
+                    // If receiver is offline, they will get the message when they come back online
+                    // The message is already saved in the database
+                    _logger.LogInformation("User {ReceiverId} is offline. Message will be delivered when they connect.", receiverId);
+                }
 
                 // Also send to the sender for consistency
                 await Clients.Caller.ReceiveMessage(message);
@@ -47,6 +66,7 @@ namespace API.Hub
                 throw;
             }
         }
+
         // Marks messages as read and notifies the sender
         // Updates read status via repository
         public async Task MarkMessageAsRead(string messageId, string senderId)
@@ -80,33 +100,96 @@ namespace API.Hub
             await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userId}");
             _logger.LogInformation("User {UserId} joined their group", userId);
         }
+
         // Handles new connections, broadcasts online status
         // Triggers when a user connects to SignalR
         public override async Task OnConnectedAsync()
         {
-            // Broadcast to all clients that this user is online
             var userId = Context.UserIdentifier;
             if (!string.IsNullOrEmpty(userId))
             {
-                await Clients.All.UserOnline(userId);
+                // Add user to online users dictionary
+                if (!OnlineUsers.TryGetValue(userId, out var connections))
+                {
+                    connections = new HashSet<string>();
+                    OnlineUsers[userId] = connections;
+                }
+                connections.Add(Context.ConnectionId);
+
+                // Broadcast online status to friends only
+                var friends = await _friendRepository.GetUserFriendsAsync(userId);
+                foreach (var friend in friends)
+                {
+                    await Clients.User(friend.UserId).UserOnline(userId);
+                }
+
                 _logger.LogInformation("User connected: {UserId}", userId);
+
+                // Check for unread messages when user comes online
+                // This is where we handle "offline messaging" delivery
+                var unreadChats = await _messageRepository.GetUserChatsAsync(userId);
+                foreach (var chat in unreadChats)
+                {
+                    // Notify the client about chats with unread messages
+                    if (chat.Messages.Any(m => m.ReceiverId == userId))
+                    {
+                        await Clients.User(userId).NewUnreadMessages(chat.OtherUserId);
+                    }
+                }
             }
 
             await base.OnConnectedAsync();
         }
+
         // Handles disconnections, broadcasts offline status
         // Triggers when a user disconnects from SignalR
         public override async Task OnDisconnectedAsync(Exception exception)
         {
-            // Broadcast to all clients that this user is offline
             var userId = Context.UserIdentifier;
             if (!string.IsNullOrEmpty(userId))
             {
-                await Clients.All.UserOffline(userId);
+                // Remove connection ID from online users
+                if (OnlineUsers.TryGetValue(userId, out var connections))
+                {
+                    connections.Remove(Context.ConnectionId);
+
+                    // If no more connections for this user, remove from online users
+                    if (connections.Count == 0)
+                    {
+                        OnlineUsers.TryRemove(userId, out _);
+
+                        // Broadcast offline status to friends only
+                        var friends = await _friendRepository.GetUserFriendsAsync(userId);
+                        foreach (var friend in friends)
+                        {
+                            await Clients.User(friend.UserId).UserOffline(userId);
+                        }
+                    }
+                }
+
                 _logger.LogInformation("User disconnected: {UserId}", userId);
             }
 
             await base.OnDisconnectedAsync(exception);
+        }
+
+        // Check if a specific user is online
+        public async Task<bool> IsUserOnline(string userId)
+        {
+            return OnlineUsers.ContainsKey(userId);
+        }
+
+        // Get all online friends for the current user
+        public async Task<List<string>> GetOnlineFriends()
+        {
+            var userId = Context.UserIdentifier;
+            if (string.IsNullOrEmpty(userId))
+            {
+                throw new InvalidOperationException("User is not authenticated");
+            }
+
+            var friends = await _friendRepository.GetUserFriendsAsync(userId);
+            return friends.Where(f => OnlineUsers.ContainsKey(f.UserId)).Select(f => f.UserId).ToList();
         }
     }
 }

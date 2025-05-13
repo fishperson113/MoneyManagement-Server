@@ -1,27 +1,190 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <title>Chat Test Client</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.5;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+            .section h3 {
+                margin-top: 0;
+            }
+
+        input, button {
+            margin: 5px 0;
+            padding: 8px;
+        }
+
+        button {
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+            button:hover {
+                background-color: #45a049;
+            }
+
+        ul {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            list-style-type: none;
+        }
+
+        li {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+            li:last-child {
+                border-bottom: none;
+            }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            margin-right: 5px;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+        }
+
+            .tab.active {
+                background-color: #f1f1f1;
+                font-weight: bold;
+            }
+
+        .tab-content {
+            display: none;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+
+            .tab-content.active {
+                display: block;
+            }
+
+        .message-list {
+            max-height: 300px;
+        }
+
+        .message-sent {
+            text-align: right;
+            background-color: #e3f2fd;
+            border-radius: 10px;
+            padding: 5px 10px;
+            margin: 5px 0 5px auto;
+            max-width: 80%;
+        }
+
+        .message-received {
+            text-align: left;
+            background-color: #f5f5f5;
+            border-radius: 10px;
+            padding: 5px 10px;
+            margin: 5px auto 5px 0;
+            max-width: 80%;
+        }
+
+        .message-time {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .load-history-btn {
+            width: 100%;
+            background-color: #f5f5f5;
+            color: #333;
+            margin-bottom: 10px;
+        }
+    </style>
 </head>
 <body>
-    <div>
+    <div class="section">
+        <h2>Chat Test Client</h2>
         <input type="text" id="userIdInput" placeholder="Your User ID">
-        <input type="text" id="receiverIdInput" placeholder="Receiver ID">
-        <input type="text" id="messageInput" placeholder="Type a message">
-        <button id="sendButton">Send</button>
         <input type="text" id="tokenInput" placeholder="JWT Token" style="width: 400px;">
+        <button id="connectButton">Connect</button>
     </div>
-    <div>
-        <h3>Messages:</h3>
-        <ul id="messages"></ul>
+
+    <div class="tabs">
+        <div class="tab active" data-tab="messaging">Messaging</div>
+        <div class="tab" data-tab="friends">Friends</div>
     </div>
-    <div>
+
+    <div id="messaging" class="tab-content active">
+        <div class="section">
+            <h3>Send Message</h3>
+            <input type="text" id="receiverIdInput" placeholder="Receiver ID">
+            <input type="text" id="messageInput" placeholder="Type a message">
+            <button id="sendButton">Send</button>
+            <button id="loadHistoryButton" class="load-history-btn">Load Chat History</button>
+        </div>
+
+        <div class="section">
+            <h3>Messages:</h3>
+            <ul id="messages" class="message-list"></ul>
+        </div>
+    </div>
+
+    <div id="friends" class="tab-content">
+        <div class="section">
+            <h3>Add Friend</h3>
+            <input type="text" id="friendIdInput" placeholder="Friend ID">
+            <button id="addFriendButton">Send Friend Request</button>
+        </div>
+
+        <div class="section">
+            <h3>Friend Requests</h3>
+            <button id="loadRequestsButton">Load Requests</button>
+            <ul id="friendRequests"></ul>
+        </div>
+
+        <div class="section">
+            <h3>My Friends</h3>
+            <button id="loadFriendsButton">Load Friends</button>
+            <ul id="friendsList"></ul>
+        </div>
+    </div>
+
+    <div class="section">
         <h3>Events:</h3>
         <ul id="events"></ul>
     </div>
-    
+
     <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                tab.classList.add('active');
+                document.getElementById(tab.getAttribute('data-tab')).classList.add('active');
+            });
+        });
+
         const connection = new signalR.HubConnectionBuilder()
             .withUrl("http://143.198.208.227:5000/hubs/chat", {
                 accessTokenFactory: () => document.getElementById("tokenInput").value
@@ -30,18 +193,25 @@
             .withAutomaticReconnect()
             .build();
 
+        const apiBaseUrl = "http://143.198.208.227:5000/api";
+        let currentUserId = '';
+
         // Start connection
         async function startConnection() {
             try {
                 await connection.start();
                 addEvent("Connected to SignalR hub!");
-                
+
                 // Join user group when connected
-                const userId = document.getElementById("userIdInput").value;
-                if (userId) {
-                    await connection.invoke("JoinUserGroup", userId);
-                    addEvent(`Joined group for user ${userId}`);
+                currentUserId = document.getElementById("userIdInput").value;
+                if (currentUserId) {
+                    await connection.invoke("JoinUserGroup", currentUserId);
+                    addEvent(`Joined group for user ${currentUserId}`);
                 }
+
+                // Get online friends
+                const onlineFriends = await connection.invoke("GetOnlineFriends");
+                addEvent(`Online friends: ${onlineFriends.join(', ') || 'None'}`);
             } catch (err) {
                 addEvent(`Connection failed: ${err}`);
                 setTimeout(startConnection, 5000);
@@ -50,16 +220,18 @@
 
         // Handle receiving messages
         connection.on("ReceiveMessage", (message) => {
-            addMessage(`(${message.sentAt}) ${message.senderName}: ${message.content}`);
+            displayMessage(message);
         });
 
         // Handle user status
         connection.on("UserOnline", (userId) => {
             addEvent(`User online: ${userId}`);
+            updateFriendStatus(userId, true);
         });
 
         connection.on("UserOffline", (userId) => {
             addEvent(`User offline: ${userId}`);
+            updateFriendStatus(userId, false);
         });
 
         // Handle message read receipts
@@ -67,11 +239,32 @@
             addEvent(`Message ${messageId} read by ${userId}`);
         });
 
+        // Handle friend requests
+        connection.on("FriendRequestReceived", (request) => {
+            addEvent(`New friend request from ${request.displayName}`);
+            loadFriendRequests();
+        });
+
+        connection.on("FriendRequestAccepted", (userId) => {
+            addEvent(`User ${userId} accepted your friend request`);
+            loadFriends();
+        });
+
+        connection.on("NewUnreadMessages", (fromUserId) => {
+            addEvent(`You have unread messages from ${fromUserId}`);
+        });
+
+        // Connect button
+        document.getElementById("connectButton").addEventListener("click", startConnection);
+
+        // Load chat history button
+        document.getElementById("loadHistoryButton").addEventListener("click", loadChatHistory);
+
         // Send message button
         document.getElementById("sendButton").addEventListener("click", async () => {
             const receiverId = document.getElementById("receiverIdInput").value;
             const content = document.getElementById("messageInput").value;
-            
+
             if (receiverId && content) {
                 try {
                     await connection.invoke("SendMessageToUser", receiverId, {
@@ -85,9 +278,271 @@
             }
         });
 
-        function addMessage(message) {
+        // Add friend button
+        document.getElementById("addFriendButton").addEventListener("click", async () => {
+            const friendId = document.getElementById("friendIdInput").value;
+            if (!friendId) return;
+
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/friends/add`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ friendId })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    addEvent(`Friend request sent: ${result.success ? 'Success' : 'Failed'}`);
+                    document.getElementById("friendIdInput").value = "";
+                } else {
+                    addEvent(`Error sending friend request: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        });
+
+        // Load friend requests button
+        document.getElementById("loadRequestsButton").addEventListener("click", loadFriendRequests);
+
+        // Load friends button
+        document.getElementById("loadFriendsButton").addEventListener("click", loadFriends);
+
+        async function loadChatHistory() {
+            const receiverId = document.getElementById("receiverIdInput").value;
+            if (!receiverId) {
+                addEvent("Please enter a receiver ID first");
+                return;
+            }
+
+            try {
+                // Mark messages as read first
+                await fetchWithAuth(`${apiBaseUrl}/messages/read/${receiverId}`, {
+                    method: 'POST'
+                });
+
+                // Then load chat history
+                const response = await fetchWithAuth(`${apiBaseUrl}/messages/chat/${receiverId}`);
+
+                if (response.ok) {
+                    const chatHistory = await response.json();
+                    document.getElementById("messages").innerHTML = "";
+
+                    addEvent(`Loaded ${chatHistory.messages?.length || 0} messages from chat with ${chatHistory.otherUserName}`);
+
+                    // Display all messages in the chat history
+                    if (chatHistory.messages && chatHistory.messages.length > 0) {
+                        chatHistory.messages.forEach(message => {
+                            displayMessage(message);
+                        });
+                    } else {
+                        addMessage("No message history found. Start a conversation!");
+                    }
+                } else {
+                    addEvent(`Error loading chat history: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        async function loadFriendRequests() {
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/friends/requests`);
+                if (response.ok) {
+                    const requests = await response.json();
+                    displayFriendRequests(requests);
+                } else {
+                    addEvent(`Error loading friend requests: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        async function loadFriends() {
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/friends`);
+                if (response.ok) {
+                    const friends = await response.json();
+                    displayFriends(friends);
+                } else {
+                    addEvent(`Error loading friends: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        function displayFriendRequests(requests) {
+            const list = document.getElementById("friendRequests");
+            list.innerHTML = "";
+
+            if (requests.length === 0) {
+                list.innerHTML = "<li>No pending friend requests</li>";
+                return;
+            }
+
+            requests.forEach(request => {
+                const li = document.createElement("li");
+                li.textContent = `${request.displayName} (${request.username}) - Requested at: ${new Date(request.requestedAt).toLocaleString()}`;
+
+                const acceptButton = document.createElement("button");
+                acceptButton.textContent = "Accept";
+                acceptButton.style.marginLeft = "10px";
+                acceptButton.onclick = async () => {
+                    try {
+                        const response = await fetchWithAuth(`${apiBaseUrl}/friends/accept/${request.userId}`, {
+                            method: 'POST'
+                        });
+
+                        if (response.ok) {
+                            addEvent(`Friend request accepted from ${request.displayName}`);
+                            loadFriendRequests();
+                            loadFriends();
+                        }
+                    } catch (err) {
+                        addEvent(`Error accepting request: ${err}`);
+                    }
+                };
+
+                const rejectButton = document.createElement("button");
+                rejectButton.textContent = "Reject";
+                rejectButton.style.marginLeft = "5px";
+                rejectButton.style.backgroundColor = "#f44336";
+                rejectButton.onclick = async () => {
+                    try {
+                        const response = await fetchWithAuth(`${apiBaseUrl}/friends/reject/${request.userId}`, {
+                            method: 'POST'
+                        });
+
+                        if (response.ok) {
+                            addEvent(`Friend request rejected from ${request.displayName}`);
+                            loadFriendRequests();
+                        }
+                    } catch (err) {
+                        addEvent(`Error rejecting request: ${err}`);
+                    }
+                };
+
+                li.appendChild(acceptButton);
+                li.appendChild(rejectButton);
+                list.appendChild(li);
+            });
+        }
+
+        function displayFriends(friends) {
+            const list = document.getElementById("friendsList");
+            list.innerHTML = "";
+
+            if (friends.length === 0) {
+                list.innerHTML = "<li>No friends yet</li>";
+                return;
+            }
+
+            friends.forEach(friend => {
+                const li = document.createElement("li");
+                const statusIndicator = friend.isOnline ? "🟢" : "🔴";
+                li.textContent = `${statusIndicator} ${friend.displayName} (${friend.username})`;
+                li.dataset.userId = friend.userId;
+
+                const chatButton = document.createElement("button");
+                chatButton.textContent = "Chat";
+                chatButton.style.marginLeft = "10px";
+                chatButton.onclick = () => {
+                    document.getElementById("receiverIdInput").value = friend.userId;
+                    document.querySelector('.tab[data-tab="messaging"]').click();
+                    loadChatHistory(); // Load chat history when starting a chat
+                    document.getElementById("messageInput").focus();
+                };
+
+                const removeButton = document.createElement("button");
+                removeButton.textContent = "Remove";
+                removeButton.style.marginLeft = "5px";
+                removeButton.style.backgroundColor = "#f44336";
+                removeButton.onclick = async () => {
+                    try {
+                        const response = await fetchWithAuth(`${apiBaseUrl}/friends/${friend.userId}`, {
+                            method: 'DELETE'
+                        });
+
+                        if (response.ok) {
+                            addEvent(`Friend removed: ${friend.displayName}`);
+                            loadFriends();
+                        }
+                    } catch (err) {
+                        addEvent(`Error removing friend: ${err}`);
+                    }
+                };
+
+                li.appendChild(chatButton);
+                li.appendChild(removeButton);
+                list.appendChild(li);
+            });
+        }
+
+        function updateFriendStatus(userId, isOnline) {
+            const friendItems = document.querySelectorAll(`#friendsList li[data-userId="${userId}"]`);
+            friendItems.forEach(item => {
+                const text = item.textContent;
+                item.textContent = `${isOnline ? "🟢" : "🔴"}${text.substring(1)}`;
+            });
+        }
+
+        function displayMessage(message) {
             const li = document.createElement("li");
-            li.textContent = message;
+            const isFromCurrentUser = message.senderId === currentUserId;
+
+            // Format date
+            const sentDate = new Date(message.sentAt);
+            const timeString = sentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const dateString = sentDate.toLocaleDateString();
+
+            // Style differently based on sender
+            li.className = isFromCurrentUser ? 'message-sent' : 'message-received';
+
+            const nameSpan = document.createElement('div');
+            nameSpan.textContent = isFromCurrentUser ? 'You' : message.senderName;
+            nameSpan.style.fontWeight = 'bold';
+
+            const contentSpan = document.createElement('div');
+            contentSpan.textContent = message.content;
+
+            const timeSpan = document.createElement('div');
+            timeSpan.textContent = `${timeString} ${dateString}`;
+            timeSpan.className = 'message-time';
+
+            li.appendChild(nameSpan);
+            li.appendChild(contentSpan);
+            li.appendChild(timeSpan);
+
+            document.getElementById("messages").appendChild(li);
+
+            // Scroll to bottom
+            const messageContainer = document.getElementById("messages");
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        }
+
+        async function fetchWithAuth(url, options = {}) {
+            const token = document.getElementById("tokenInput").value;
+            if (!token) {
+                throw new Error("No authentication token provided");
+            }
+
+            const headers = options.headers || {};
+            headers['Authorization'] = `Bearer ${token}`;
+
+            return fetch(url, {
+                ...options,
+                headers
+            });
+        }
+
+        function addMessage(textMessage) {
+            const li = document.createElement("li");
+            li.textContent = textMessage;
             document.getElementById("messages").appendChild(li);
         }
 
@@ -96,9 +551,6 @@
             li.textContent = event;
             document.getElementById("events").appendChild(li);
         }
-
-        // Start the connection
-        document.getElementById("tokenInput").addEventListener("change", startConnection);
     </script>
 </body>
 </html>

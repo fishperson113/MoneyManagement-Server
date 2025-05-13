@@ -167,6 +167,37 @@ namespace API.Helpers
                 .ForMember(dest => dest.Sender, opt => opt.Ignore())
                 .ForMember(dest => dest.Receiver, opt => opt.Ignore());
 
+            CreateMap<UserFriend, FriendDTO>()
+                .ForMember(dest => dest.UserId, opt => opt.MapFrom((src, _, _, context) =>
+                    context.Items.ContainsKey("CurrentUserId") &&
+                    (string)context.Items["CurrentUserId"] == src.UserId ? src.FriendId : src.UserId))
+                .ForMember(dest => dest.Username, opt => opt.MapFrom((src, _, _, context) =>
+                    context.Items.ContainsKey("CurrentUserId") &&
+                    (string)context.Items["CurrentUserId"] == src.UserId ? src.Friend.UserName : src.User.UserName))
+                .ForMember(dest => dest.DisplayName, opt => opt.MapFrom((src, _, _, context) => {
+                    if (context.Items.ContainsKey("CurrentUserId") && (string)context.Items["CurrentUserId"] == src.UserId)
+                        return $"{src.Friend.FirstName} {src.Friend.LastName}";
+                    return $"{src.User.FirstName} {src.User.LastName}";
+                }))
+                .ForMember(dest => dest.IsOnline, opt => opt.Ignore()) // Set by SignalR/service
+                .ForMember(dest => dest.LastActive, opt => opt.Ignore()) // Set by service if needed
+                .ForMember(dest => dest.IsPendingRequest, opt => opt.MapFrom(src => !src.IsAccepted));
+
+            CreateMap<UserFriend, FriendRequestDTO>()
+                .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.UserId))
+                .ForMember(dest => dest.Username, opt => opt.MapFrom(src => src.User.UserName))
+                .ForMember(dest => dest.DisplayName, opt => opt.MapFrom(src => $"{src.User.FirstName} {src.User.LastName}"))
+                .ForMember(dest => dest.RequestedAt, opt => opt.MapFrom(src => src.RequestedAt));
+
+            CreateMap<AddFriendDTO, UserFriend>()
+                .ForMember(dest => dest.FriendId, opt => opt.MapFrom(src => src.FriendId))
+                .ForMember(dest => dest.UserId, opt => opt.Ignore())
+                .ForMember(dest => dest.IsAccepted, opt => opt.MapFrom(_ => false))
+                .ForMember(dest => dest.RequestedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
+                .ForMember(dest => dest.AcceptedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.User, opt => opt.Ignore())
+                .ForMember(dest => dest.Friend, opt => opt.Ignore());
+
             // Simple self-mappings for DTOs that are created directly in the repository
             CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
             CreateMap<CashFlowSummaryDTO, CashFlowSummaryDTO>();
@@ -184,6 +215,10 @@ namespace API.Helpers
 
             // YearlySummaryDTO Mapping
             CreateMap<YearlySummaryDTO, YearlySummaryDTO>();
+
+            CreateMap<FriendDTO, FriendDTO>();
+            CreateMap<FriendRequestDTO, FriendRequestDTO>();
+
 
         }
 

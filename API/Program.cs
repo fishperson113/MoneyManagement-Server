@@ -83,6 +83,7 @@ builder.Services.AddScoped<SeedService>();
 builder.Services.AddScoped<GeminiService>();
 builder.Services.ConfigureFirebase(builder.Configuration);
 builder.Services.AddScoped<MessageRepository>();
+builder.Services.AddScoped<FriendRepository>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 builder.Services.AddSignalR();
 

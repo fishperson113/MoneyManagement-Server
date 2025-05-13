@@ -13,6 +13,10 @@ namespace API.Models.Entities
 
         public ICollection<Message> MessagesSent { get; set; } = new List<Message>();
         public ICollection<Message> MessagesReceived { get; set; } = new List<Message>();
+        public ICollection<UserFriend> FriendRequestsSent { get; set; } = new List<UserFriend>();
+
+        public ICollection<UserFriend> FriendRequestsReceived { get; set; } = new List<UserFriend>();
+
 
     }
 }

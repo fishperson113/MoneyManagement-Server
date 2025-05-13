@@ -15,6 +15,8 @@ namespace API.Data
         public DbSet<Transaction> Transactions { get; set; } = null!;
         public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
         public DbSet<Message> Messages { get; set; } = null!;
+        public DbSet<UserFriend> UserFriends { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -105,6 +107,21 @@ namespace API.Data
                 .HasOne(m => m.Receiver)
                 .WithMany(u => u.MessagesReceived)
                 .HasForeignKey(m => m.ReceiverId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<UserFriend>()
+                .HasKey(uf => new { uf.UserId, uf.FriendId });
+
+            modelBuilder.Entity<UserFriend>()
+                .HasOne(uf => uf.User)
+                .WithMany(u => u.FriendRequestsSent)
+                .HasForeignKey(uf => uf.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<UserFriend>()
+                .HasOne(uf => uf.Friend)
+                .WithMany(u => u.FriendRequestsReceived)
+                .HasForeignKey(uf => uf.FriendId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }
