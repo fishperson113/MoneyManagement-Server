@@ -34,6 +34,7 @@ jobs:
           GEMINI_KEY=${{ secrets.GEMINI_KEY }}
           FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_CREDENTIAL_PATH=/app/secrets/firebase.json
+          FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}
           EOF
 
           git fetch origin
