@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using API.Models.DTOs;
 using API.Helpers;
+using API.Models.Entities;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 namespace API.Repositories
 {
     public interface IAccountRepository
@@ -10,5 +13,9 @@ namespace API.Repositories
 
         public Task<bool> ClearDatabaseAsync();
         public Task<AuthenticationResult> RefreshTokenAsync(RefreshTokenDTO model);
+
+        public Task<AvatarDTO> UploadAvatarAsync(string userId, IFormFile file);
+        public Task<UserProfileDTO> GetUserProfileAsync(ClaimsPrincipal user);
+
     }
 }

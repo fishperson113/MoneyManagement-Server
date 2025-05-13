@@ -22,12 +22,20 @@ builder.Configuration.AddJsonFile($"appsettings.json", optional: true).AddEnviro
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new API.Helpers.JsonDateTimeConverter());
+    options.JsonSerializerOptions.Converters.Add(new API.Helpers.JsonNullableDateTimeConverter());
+    options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+});
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(option =>
 {
     option.SwaggerDoc("v1", new OpenApiInfo { Title = "MoneyManagement API", Version = "v1" });
+
+    option.OperationFilter<SwaggerFileOperationFilter>();
+
     option.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         In = ParameterLocation.Header,
@@ -74,14 +82,16 @@ builder.Services.AddHttpClient();
 
 builder.Services.AddAutoMapper(typeof(Program), typeof(ApplicationMapper));
 
-builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.ConfigureFirebase(builder.Configuration);
+builder.Services.ConfigureFirebaseStorage(builder.Configuration);
+
 builder.Services.AddScoped<IWalletRepository, WalletRepository>();
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<SeedService>();
 builder.Services.AddScoped<GeminiService>();
-builder.Services.ConfigureFirebase(builder.Configuration);
 builder.Services.AddScoped<MessageRepository>();
 builder.Services.AddScoped<FriendRepository>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));

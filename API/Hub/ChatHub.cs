@@ -191,5 +191,39 @@ namespace API.Hub
             var friends = await _friendRepository.GetUserFriendsAsync(userId);
             return friends.Where(f => OnlineUsers.ContainsKey(f.UserId)).Select(f => f.UserId).ToList();
         }
+
+        // Accepts a friend request and notifies both users
+        public async Task AcceptFriendRequest(string friendId)
+        {
+            try
+            {
+                var userId = Context.UserIdentifier;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User is not authenticated");
+                }
+
+                // Accept friend request via repository
+                var success = await _friendRepository.AcceptFriendRequestAsync(userId, friendId);
+
+                if (success)
+                {
+                    // Notify the original requester (friend) that their request was accepted
+                    await Clients.User(friendId).FriendRequestAccepted(userId);
+
+                    // Also notify the current user (for UI consistency across devices)
+                    await Clients.Caller.FriendRequestAccepted(friendId);
+
+                    _logger.LogInformation("Friend request accepted: {UserId} accepted {FriendId}'s request", userId, friendId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error accepting friend request");
+                throw;
+            }
+        }
+
     }
+
 }

@@ -89,27 +89,62 @@
             max-height: 300px;
         }
 
-        .message-sent {
-            text-align: right;
-            background-color: #e3f2fd;
-            border-radius: 10px;
-            padding: 5px 10px;
-            margin: 5px 0 5px auto;
+        .message-sent, .message-received {
+            display: flex;
+            margin: 10px 0;
             max-width: 80%;
         }
 
-        .message-received {
-            text-align: left;
-            background-color: #f5f5f5;
+        .message-sent {
+            margin-left: auto;
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin: 0 10px;
+            background-color: #ddd;
+            background-size: cover;
+            background-position: center;
+            flex-shrink: 0;
+        }
+
+        .message-bubble {
+            padding: 10px;
             border-radius: 10px;
-            padding: 5px 10px;
-            margin: 5px auto 5px 0;
-            max-width: 80%;
+            position: relative;
+        }
+
+        .message-sent .message-bubble {
+            background-color: #e3f2fd;
+            border-top-right-radius: 0;
+        }
+
+        .message-received .message-bubble {
+            background-color: #f5f5f5;
+            border-top-left-radius: 0;
+        }
+
+        .message-content {
+            margin-bottom: 5px;
+        }
+
+        .message-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .message-sender {
+            font-weight: bold;
+            margin-right: 10px;
         }
 
         .message-time {
-            font-size: 0.8em;
-            color: #666;
+            text-align: right;
         }
 
         .load-history-btn {
@@ -117,6 +152,30 @@
             background-color: #f5f5f5;
             color: #333;
             margin-bottom: 10px;
+        }
+
+        .friend-item {
+            display: flex;
+            align-items: center;
+        }
+
+        .friend-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background-color: #ddd;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .default-avatar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: white;
+            background-color: #3498db;
         }
     </style>
 </head>
@@ -144,7 +203,7 @@
 
         <div class="section">
             <h3>Messages:</h3>
-            <ul id="messages" class="message-list"></ul>
+            <div id="messages" class="message-list"></div>
         </div>
     </div>
 
@@ -186,15 +245,16 @@
         });
 
         const connection = new signalR.HubConnectionBuilder()
-            .withUrl("http://143.198.208.227:5000/hubs/chat", {
+            .withUrl("http://localhost:5000/hubs/chat", {
                 accessTokenFactory: () => document.getElementById("tokenInput").value
             })
             .configureLogging(signalR.LogLevel.Information)
             .withAutomaticReconnect()
             .build();
 
-        const apiBaseUrl = "http://143.198.208.227:5000/api";
+        const apiBaseUrl = "http://localhost:5000/api";
         let currentUserId = '';
+        let userProfiles = {}; // Cache for user profiles
 
         // Start connection
         async function startConnection() {
@@ -207,6 +267,9 @@
                 if (currentUserId) {
                     await connection.invoke("JoinUserGroup", currentUserId);
                     addEvent(`Joined group for user ${currentUserId}`);
+
+                    // Get current user profile
+                    await getUserProfile(currentUserId);
                 }
 
                 // Get online friends
@@ -221,6 +284,11 @@
         // Handle receiving messages
         connection.on("ReceiveMessage", (message) => {
             displayMessage(message);
+
+            // If the sender's profile isn't cached, fetch it
+            if (!userProfiles[message.senderId]) {
+                getUserProfile(message.senderId);
+            }
         });
 
         // Handle user status
@@ -310,6 +378,54 @@
         // Load friends button
         document.getElementById("loadFriendsButton").addEventListener("click", loadFriends);
 
+        async function getUserProfile(userId) {
+            try {
+                // If we already have this profile cached, return it
+                if (userProfiles[userId]) {
+                    return userProfiles[userId];
+                }
+
+                // For the current user, use the profile endpoint
+                if (userId === currentUserId) {
+                    const response = await fetchWithAuth(`${apiBaseUrl}/accounts/profile`);
+                    if (response.ok) {
+                        const profile = await response.json();
+                        userProfiles[userId] = profile;
+                        updateUserAvatarsInChat(userId, profile.avatarUrl);
+                        return profile;
+                    }
+                }
+
+                // For other users, we might need to implement a different approach
+                // since we don't have an endpoint to get profiles by ID
+                // For now, create a placeholder profile
+                const placeholderProfile = {
+                    id: userId,
+                    userName: userId,
+                    displayName: userId,
+                    avatarUrl: null
+                };
+
+                userProfiles[userId] = placeholderProfile;
+                return placeholderProfile;
+            } catch (err) {
+                console.error(`Error fetching user profile: ${err}`);
+                return null;
+            }
+        }
+
+
+        function updateUserAvatarsInChat(userId, avatarUrl) {
+            // Update any existing message avatars for this user
+            document.querySelectorAll(`.message-avatar[data-user-id="${userId}"]`).forEach(avatar => {
+                if (avatarUrl) {
+                    avatar.style.backgroundImage = `url(${avatarUrl})`;
+                    avatar.classList.remove('default-avatar');
+                    avatar.textContent = '';
+                }
+            });
+        }
+
         async function loadChatHistory() {
             const receiverId = document.getElementById("receiverIdInput").value;
             if (!receiverId) {
@@ -318,6 +434,9 @@
             }
 
             try {
+                // Get receiver profile
+                await getUserProfile(receiverId);
+
                 // Mark messages as read first
                 await fetchWithAuth(`${apiBaseUrl}/messages/read/${receiverId}`, {
                     method: 'POST'
@@ -354,6 +473,11 @@
                 if (response.ok) {
                     const requests = await response.json();
                     displayFriendRequests(requests);
+
+                    // Fetch profiles for all friend requests
+                    for (const request of requests) {
+                        await getUserProfile(request.userId);
+                    }
                 } else {
                     addEvent(`Error loading friend requests: ${response.status}`);
                 }
@@ -368,6 +492,11 @@
                 if (response.ok) {
                     const friends = await response.json();
                     displayFriends(friends);
+
+                    // Fetch profiles for all friends
+                    for (const friend of friends) {
+                        await getUserProfile(friend.userId);
+                    }
                 } else {
                     addEvent(`Error loading friends: ${response.status}`);
                 }
@@ -387,7 +516,23 @@
 
             requests.forEach(request => {
                 const li = document.createElement("li");
-                li.textContent = `${request.displayName} (${request.username}) - Requested at: ${new Date(request.requestedAt).toLocaleString()}`;
+                li.className = "friend-item";
+
+                // Avatar
+                const avatar = document.createElement("div");
+                avatar.className = "friend-avatar";
+                avatar.dataset.userId = request.userId;
+
+                const profile = userProfiles[request.userId];
+                if (profile && profile.avatarUrl) {
+                    avatar.style.backgroundImage = `url(${profile.avatarUrl})`;
+                } else {
+                    avatar.classList.add('default-avatar');
+                    avatar.textContent = request.displayName.charAt(0).toUpperCase();
+                }
+
+                const info = document.createElement("div");
+                info.textContent = `${request.displayName} (${request.username}) - Requested at: ${new Date(request.requestedAt).toLocaleString()}`;
 
                 const acceptButton = document.createElement("button");
                 acceptButton.textContent = "Accept";
@@ -427,6 +572,8 @@
                     }
                 };
 
+                li.appendChild(avatar);
+                li.appendChild(info);
                 li.appendChild(acceptButton);
                 li.appendChild(rejectButton);
                 list.appendChild(li);
@@ -444,9 +591,26 @@
 
             friends.forEach(friend => {
                 const li = document.createElement("li");
-                const statusIndicator = friend.isOnline ? "🟢" : "🔴";
-                li.textContent = `${statusIndicator} ${friend.displayName} (${friend.username})`;
+                li.className = "friend-item";
                 li.dataset.userId = friend.userId;
+
+                // Avatar
+                const avatar = document.createElement("div");
+                avatar.className = "friend-avatar";
+                avatar.dataset.userId = friend.userId;
+
+                const profile = userProfiles[friend.userId];
+                if (profile && profile.avatarUrl) {
+                    avatar.style.backgroundImage = `url(${profile.avatarUrl})`;
+                } else {
+                    avatar.classList.add('default-avatar');
+                    avatar.textContent = friend.displayName.charAt(0).toUpperCase();
+                }
+
+                const statusIndicator = friend.isOnline ? "🟢" : "🔴";
+
+                const info = document.createElement("div");
+                info.textContent = `${statusIndicator} ${friend.displayName} (${friend.username})`;
 
                 const chatButton = document.createElement("button");
                 chatButton.textContent = "Chat";
@@ -477,6 +641,8 @@
                     }
                 };
 
+                li.appendChild(avatar);
+                li.appendChild(info);
                 li.appendChild(chatButton);
                 li.appendChild(removeButton);
                 list.appendChild(li);
@@ -486,39 +652,73 @@
         function updateFriendStatus(userId, isOnline) {
             const friendItems = document.querySelectorAll(`#friendsList li[data-userId="${userId}"]`);
             friendItems.forEach(item => {
-                const text = item.textContent;
-                item.textContent = `${isOnline ? "🟢" : "🔴"}${text.substring(1)}`;
+                const statusText = item.querySelector('div');
+                if (statusText) {
+                    const text = statusText.textContent;
+                    statusText.textContent = `${isOnline ? "🟢" : "🔴"}${text.substring(1)}`;
+                }
             });
         }
 
         function displayMessage(message) {
-            const li = document.createElement("li");
             const isFromCurrentUser = message.senderId === currentUserId;
+            const messageDiv = document.createElement("div");
+            messageDiv.className = isFromCurrentUser ? 'message-sent' : 'message-received';
 
             // Format date
             const sentDate = new Date(message.sentAt);
             const timeString = sentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const dateString = sentDate.toLocaleDateString();
 
-            // Style differently based on sender
-            li.className = isFromCurrentUser ? 'message-sent' : 'message-received';
+            // Create avatar
+            const avatar = document.createElement("div");
+            avatar.className = "message-avatar";
+            avatar.dataset.userId = message.senderId;
 
+            const profile = userProfiles[message.senderId];
+            if (profile && profile.avatarUrl) {
+                avatar.style.backgroundImage = `url(${profile.avatarUrl})`;
+            } else {
+                avatar.classList.add('default-avatar');
+                avatar.textContent = (message.senderName || "?").charAt(0).toUpperCase();
+                // Try to fetch this user's profile if we don't have it
+                if (!userProfiles[message.senderId]) {
+                    getUserProfile(message.senderId);
+                }
+            }
+
+            // Message bubble
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble";
+
+            // Sender name
             const nameSpan = document.createElement('div');
+            nameSpan.className = "message-sender";
             nameSpan.textContent = isFromCurrentUser ? 'You' : message.senderName;
-            nameSpan.style.fontWeight = 'bold';
 
+            // Message content
             const contentSpan = document.createElement('div');
+            contentSpan.className = "message-content";
             contentSpan.textContent = message.content;
 
+            // Time
             const timeSpan = document.createElement('div');
+            timeSpan.className = "message-time";
             timeSpan.textContent = `${timeString} ${dateString}`;
-            timeSpan.className = 'message-time';
 
-            li.appendChild(nameSpan);
-            li.appendChild(contentSpan);
-            li.appendChild(timeSpan);
+            // Put it all together
+            const messageInfo = document.createElement('div');
+            messageInfo.className = "message-info";
+            messageInfo.appendChild(nameSpan);
+            messageInfo.appendChild(timeSpan);
 
-            document.getElementById("messages").appendChild(li);
+            bubble.appendChild(messageInfo);
+            bubble.appendChild(contentSpan);
+
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(bubble);
+
+            document.getElementById("messages").appendChild(messageDiv);
 
             // Scroll to bottom
             const messageContainer = document.getElementById("messages");
@@ -541,9 +741,12 @@
         }
 
         function addMessage(textMessage) {
-            const li = document.createElement("li");
-            li.textContent = textMessage;
-            document.getElementById("messages").appendChild(li);
+            const div = document.createElement("div");
+            div.textContent = textMessage;
+            div.style.padding = "10px";
+            div.style.textAlign = "center";
+            div.style.color = "#666";
+            document.getElementById("messages").appendChild(div);
         }
 
         function addEvent(event) {

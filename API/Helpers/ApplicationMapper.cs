@@ -218,7 +218,7 @@ namespace API.Helpers
 
             CreateMap<FriendDTO, FriendDTO>();
             CreateMap<FriendRequestDTO, FriendRequestDTO>();
-
+            CreateMap<AvatarDTO, AvatarDTO>();
 
         }
 

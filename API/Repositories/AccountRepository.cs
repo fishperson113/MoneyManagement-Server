@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using API.Data;
 using AutoMapper;
 using API.Services;
+using Microsoft.AspNetCore.Mvc;
 
 
 namespace API.Repositories
@@ -24,23 +25,28 @@ namespace API.Repositories
         private readonly ApplicationDbContext context;
         private readonly IMapper mapper;
         private readonly ITokenService service;
+        private readonly FirebaseHelper firebaseHelper;
 
-        public AccountRepository(UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager, 
-            IConfiguration configuration, RoleManager<IdentityRole> roleManager,
-            ILogger<AccountRepository> logger,
-            ApplicationDbContext context,
-            IMapper mapper,
-            ITokenService service)
+        public AccountRepository(
+             UserManager<ApplicationUser> userManager,
+             SignInManager<ApplicationUser> signInManager,
+             IConfiguration configuration,
+             RoleManager<IdentityRole> roleManager,
+             ILogger<AccountRepository> logger,
+             ApplicationDbContext context,
+             IMapper mapper,
+             ITokenService service,
+             FirebaseHelper firebaseHelper)
         {
             this.userManager = userManager;
             this.signInManager = signInManager;
             this.configuration = configuration;
-            this.roleManager= roleManager;
-            this.logger=logger;
+            this.roleManager = roleManager;
+            this.logger = logger;
             this.context = context;
             this.mapper = mapper;
-            this.service= service;
+            this.service = service;
+            this.firebaseHelper = firebaseHelper;
         }
 
         public async Task<bool> ClearDatabaseAsync()
@@ -220,7 +226,76 @@ namespace API.Repositories
         {
             return await service.RefreshTokenAsync(model.ExpiredToken);
         }
-        
+        public async Task<AvatarDTO> UploadAvatarAsync(string userId, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                throw new ArgumentException("No file uploaded");
+            }
+
+            // Verify file is an image
+            if (!file.ContentType.StartsWith("image/"))
+            {
+                throw new ArgumentException("Only image files are allowed");
+            }
+
+            // Find user
+            var user = await userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                throw new KeyNotFoundException("User not found");
+            }
+
+            try
+            {
+                // Upload file to Firebase Storage
+                var avatarUrl = await firebaseHelper.UploadUserAvatarAsync(userId, file);
+
+                // Update user record in database
+                user.AvatarUrl = avatarUrl;
+                await userManager.UpdateAsync(user);
+
+                return new AvatarDTO { AvatarUrl = avatarUrl };
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error uploading avatar for user {UserId}", userId);
+                throw; // Re-throw to be handled by controller
+            }
+        }
+        public async Task<UserProfileDTO> GetUserProfileAsync(ClaimsPrincipal userPrincipal)
+        {
+            if (userPrincipal == null || !userPrincipal.Identity.IsAuthenticated)
+            {
+                throw new UnauthorizedAccessException("User is not authenticated.");
+            }
+
+            // Lấy userId từ JWT claims
+            var userId = userPrincipal.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                throw new UnauthorizedAccessException("Invalid token: no user ID found.");
+            }
+
+            var user = await userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                throw new KeyNotFoundException("User not found.");
+            }
+
+            return new UserProfileDTO
+            {
+                Id = user.Id,
+                Email = user.Email,
+                UserName = user.UserName,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                DisplayName = $"{user.FirstName} {user.LastName}",
+                AvatarUrl = user.AvatarUrl
+            };
+        }
+
+
     }
 
 }

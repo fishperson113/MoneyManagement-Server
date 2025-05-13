@@ -3,6 +3,7 @@ using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Google.Cloud.Firestore.V1;
+using API.Helpers;
 
 namespace API.Config
 {
@@ -22,11 +23,14 @@ namespace API.Config
             var clientBuilder = new FirestoreClientBuilder { Credential = credential };
             var client = clientBuilder.Build();
             var firestoreDb = FirestoreDb.Create(projectId, client);
-
             services.AddSingleton(firestoreDb);
+
+            // Make the credential available for other services
+            services.AddSingleton(credential);
 
             return services;
         }
+
 
     }
 }

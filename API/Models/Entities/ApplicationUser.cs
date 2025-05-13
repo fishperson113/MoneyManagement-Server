@@ -6,6 +6,7 @@ namespace API.Models.Entities
     {
         public string? FirstName { get; set; }
         public string? LastName { get; set; }
+        public string? AvatarUrl { get; set; }
 
         public ICollection<Wallet>? Wallets { get; set; }
         public ICollection<Category>? Categories { get; set; }

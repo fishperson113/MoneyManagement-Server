@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using API.Models.DTOs;
 using API.Repositories;
+using API.Hub;
+using API.Models.Entities;
+using Microsoft.AspNetCore.SignalR;
 
 namespace API.Controllers
 {
@@ -89,7 +92,13 @@ namespace API.Controllers
                 if (userId == null)
                     return Unauthorized();
 
+                var hubContext = HttpContext.RequestServices.GetService<IHubContext<ChatHub, IChatClient>>();
+
                 var success = await _friendRepository.AcceptFriendRequestAsync(userId, friendId);
+
+                await hubContext.Clients.User(friendId).FriendRequestAccepted(userId);
+                await hubContext.Clients.User(userId).FriendRequestAccepted(friendId);
+
                 return Ok(new { success });
             }
             catch (Exception ex)

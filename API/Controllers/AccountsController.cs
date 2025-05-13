@@ -8,6 +8,8 @@ using API.Models.Entities;
 using AutoMapper;
 using API.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
 namespace API.Controllers
 {
     [Route("api/[controller]")]
@@ -98,5 +100,77 @@ namespace API.Controllers
 
             return Ok(users);
         }
+        [HttpPost("avatar")]
+        [Authorize]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadAvatar(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("No file uploaded");
+            }
+
+            // Verify file is an image
+            if (!file.ContentType.StartsWith("image/"))
+            {
+                return BadRequest("Only image files are allowed");
+            }
+
+            // Get current user ID from claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized();
+            }
+
+            try
+            {
+                var result = await accountRepository.UploadAvatarAsync(userId, file);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error uploading avatar: {ex.Message}");
+            }
+        }
+        [HttpPost("upload")]
+        public IActionResult UploadFile(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("No file uploaded");
+            }
+            // Process the file (save it, etc.)
+            // ...
+            return Ok(new { FileName = file.FileName, Length = file.Length });
+        }
+        [Authorize]
+        [HttpGet("profile")]
+        public async Task<IActionResult> GetProfile()
+        {
+            try
+            {
+                var profile = await accountRepository.GetUserProfileAsync(User);
+                return Ok(profile);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Unauthorized();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+
+
     }
 }
