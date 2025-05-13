@@ -170,6 +170,8 @@ namespace API.Repositories
                     result.Add(new ChatHistoryDTO
                     {
                         ChatId = chatId,
+                        OtherUserId = partnerId,
+                        OtherUserName = $"{partner.FirstName} {partner.LastName}",
                         Messages = messages.Select(m => new MessageDTO
                         {
                             MessageID = m.MessageID,
@@ -253,6 +255,8 @@ namespace API.Repositories
                 return new ChatHistoryDTO
                 {
                     ChatId = chatId,
+                    OtherUserId = otherUserId,
+                    OtherUserName = $"{partner.FirstName} {partner.LastName}",
                     Messages = messages.ToList()
                 };
             }
