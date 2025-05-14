@@ -322,6 +322,26 @@
             addEvent(`You have unread messages from ${fromUserId}`);
         });
 
+        // Add this handler in your SignalR connection setup
+        connection.on("UserAvatarUpdated", (userId, newAvatarUrl) => {
+            // Update cached profile
+            if (userProfiles[userId]) {
+                userProfiles[userId].avatarUrl = newAvatarUrl;
+            }
+
+            // Update avatars in chat messages
+            updateUserAvatarsInChat(userId, newAvatarUrl);
+
+            // Update friend list avatars
+            document.querySelectorAll(`.friend-avatar[data-user-id="${userId}"]`).forEach(avatar => {
+                avatar.style.backgroundImage = `url(${newAvatarUrl})`;
+                avatar.classList.remove('default-avatar');
+                avatar.textContent = '';
+            });
+
+            addEvent(`User ${userId} updated their avatar`);
+        });
+
         // Connect button
         document.getElementById("connectButton").addEventListener("click", startConnection);
 
@@ -385,34 +405,31 @@
                     return userProfiles[userId];
                 }
 
-                // For the current user, use the profile endpoint
-                if (userId === currentUserId) {
-                    const response = await fetchWithAuth(`${apiBaseUrl}/accounts/profile`);
-                    if (response.ok) {
-                        const profile = await response.json();
-                        userProfiles[userId] = profile;
-                        updateUserAvatarsInChat(userId, profile.avatarUrl);
-                        return profile;
-                    }
+                // Try to fetch from server - works for both current user and other users
+                const response = await fetchWithAuth(`${apiBaseUrl}/accounts/users/${userId}`);
+                if (response.ok) {
+                    const profile = await response.json();
+                    userProfiles[userId] = profile;
+                    updateUserAvatarsInChat(userId, profile.avatarUrl);
+                    return profile;
+                } else {
+                    // Fallback to placeholder if fetch fails
+                    const placeholderProfile = {
+                        id: userId,
+                        userName: userId,
+                        displayName: userId,
+                        avatarUrl: null
+                    };
+
+                    userProfiles[userId] = placeholderProfile;
+                    return placeholderProfile;
                 }
-
-                // For other users, we might need to implement a different approach
-                // since we don't have an endpoint to get profiles by ID
-                // For now, create a placeholder profile
-                const placeholderProfile = {
-                    id: userId,
-                    userName: userId,
-                    displayName: userId,
-                    avatarUrl: null
-                };
-
-                userProfiles[userId] = placeholderProfile;
-                return placeholderProfile;
             } catch (err) {
                 console.error(`Error fetching user profile: ${err}`);
                 return null;
             }
         }
+
 
 
         function updateUserAvatarsInChat(userId, avatarUrl) {

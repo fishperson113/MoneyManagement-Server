@@ -11,5 +11,7 @@ namespace API.Models.Entities
         Task NewUnreadMessages(string fromUserId);
         Task FriendRequestReceived(FriendRequestDTO request);
         Task FriendRequestAccepted(string userId);
+        Task UserAvatarUpdated(string userId, string newAvatarUrl);
+
     }
 }

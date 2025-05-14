@@ -170,7 +170,54 @@ namespace API.Controllers
                 return NotFound(ex.Message);
             }
         }
+        [HttpGet("users/{userId}")]
+        [Authorize]
+        public async Task<IActionResult> GetUserById(string userId)
+        {
+            try
+            {
+                var userProfile = await accountRepository.GetUserByIdAsync(userId);
+                return Ok(userProfile);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error retrieving user profile: {ex.Message}");
+            }
+        }
+        [HttpPut("profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile([FromForm] UpdateUserDTO model)
+        {
+            try
+            {
+                // Get current user ID from claims
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
 
+                // Update user profile
+                var updatedProfile = await accountRepository.UpdateUserAsync(userId, model);
+                return Ok(updatedProfile);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error updating profile: {ex.Message}");
+            }
+        }
 
     }
 }

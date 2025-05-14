@@ -16,6 +16,8 @@ namespace API.Repositories
 
         public Task<AvatarDTO> UploadAvatarAsync(string userId, IFormFile file);
         public Task<UserProfileDTO> GetUserProfileAsync(ClaimsPrincipal user);
+        public Task<UserProfileDTO> GetUserByIdAsync(string userId);
+        public Task<UserProfileDTO> UpdateUserAsync(string userId, UpdateUserDTO model, IFormFile? avatarFile = null);
 
     }
 }

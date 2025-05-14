@@ -90,6 +90,7 @@ builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<IUserProfileMediator, UserProfileMediator>();
 builder.Services.AddScoped<SeedService>();
 builder.Services.AddScoped<GeminiService>();
 builder.Services.AddScoped<MessageRepository>();

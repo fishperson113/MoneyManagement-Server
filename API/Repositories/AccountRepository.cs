@@ -26,7 +26,7 @@ namespace API.Repositories
         private readonly IMapper mapper;
         private readonly ITokenService service;
         private readonly FirebaseHelper firebaseHelper;
-
+        private readonly IUserProfileMediator _profileMediator;
         public AccountRepository(
              UserManager<ApplicationUser> userManager,
              SignInManager<ApplicationUser> signInManager,
@@ -36,7 +36,8 @@ namespace API.Repositories
              ApplicationDbContext context,
              IMapper mapper,
              ITokenService service,
-             FirebaseHelper firebaseHelper)
+             FirebaseHelper firebaseHelper,
+             IUserProfileMediator profileMediator)
         {
             this.userManager = userManager;
             this.signInManager = signInManager;
@@ -47,6 +48,7 @@ namespace API.Repositories
             this.mapper = mapper;
             this.service = service;
             this.firebaseHelper = firebaseHelper;
+            _profileMediator = profileMediator;
         }
 
         public async Task<bool> ClearDatabaseAsync()
@@ -254,6 +256,7 @@ namespace API.Repositories
                 // Update user record in database
                 user.AvatarUrl = avatarUrl;
                 await userManager.UpdateAsync(user);
+                await _profileMediator.NotifyAvatarChanged(userId, avatarUrl);
 
                 return new AvatarDTO { AvatarUrl = avatarUrl };
             }
@@ -282,6 +285,114 @@ namespace API.Repositories
             {
                 throw new KeyNotFoundException("User not found.");
             }
+
+            return new UserProfileDTO
+            {
+                Id = user.Id,
+                Email = user.Email,
+                UserName = user.UserName,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                DisplayName = $"{user.FirstName} {user.LastName}",
+                AvatarUrl = user.AvatarUrl
+            };
+        }
+        public async Task<UserProfileDTO> GetUserByIdAsync(string userId)
+        {
+            var user = await userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                throw new KeyNotFoundException("User not found");
+            }
+
+            return new UserProfileDTO
+            {
+                Id = user.Id,
+                Email = user.Email,
+                UserName = user.UserName,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                DisplayName = $"{user.FirstName} {user.LastName}",
+                AvatarUrl = user.AvatarUrl
+            };
+        }
+        public async Task<UserProfileDTO> UpdateUserAsync(string userId, UpdateUserDTO model, IFormFile? avatarFile = null)
+        {
+            var user = await userManager.FindByIdAsync(userId);
+            if (user == null)
+                throw new KeyNotFoundException("User not found");
+
+            // ✅ Require current password for any update
+            if (string.IsNullOrWhiteSpace(model.CurrentPassword))
+                throw new InvalidOperationException("Current password is required to update profile.");
+
+            var passwordCheck = await userManager.CheckPasswordAsync(user, model.CurrentPassword);
+            if (!passwordCheck)
+                throw new InvalidOperationException("Current password is incorrect.");
+
+            bool profileUpdated = false;
+
+            // Optional: Name
+            if (!string.IsNullOrWhiteSpace(model.FirstName) && model.FirstName != user.FirstName)
+            {
+                user.FirstName = model.FirstName;
+                profileUpdated = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.LastName) && model.LastName != user.LastName)
+            {
+                user.LastName = model.LastName;
+                profileUpdated = true;
+            }
+
+            // Optional: Password change
+            bool wantsPasswordChange =
+                !string.IsNullOrWhiteSpace(model.NewPassword) ||
+                !string.IsNullOrWhiteSpace(model.ConfirmNewPassword);
+
+            if (wantsPasswordChange)
+            {
+                if (string.IsNullOrWhiteSpace(model.NewPassword) ||
+                    string.IsNullOrWhiteSpace(model.ConfirmNewPassword))
+                {
+                    throw new InvalidOperationException("To change password, new password and confirmation are required.");
+                }
+
+                if (model.NewPassword != model.ConfirmNewPassword)
+                {
+                    throw new InvalidOperationException("New password and confirmation do not match.");
+                }
+
+                var token = await userManager.GeneratePasswordResetTokenAsync(user);
+                var result = await userManager.ResetPasswordAsync(user, token, model.NewPassword);
+
+                if (!result.Succeeded)
+                {
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    throw new InvalidOperationException($"Failed to update password: {errors}");
+                }
+
+                logger.LogInformation("Password changed for user {UserId}", userId);
+            }
+
+            // Optional: Avatar
+            if (avatarFile != null)
+            {
+                await UploadAvatarAsync(userId, avatarFile);
+            }
+
+            if (profileUpdated)
+            {
+                var updateResult = await userManager.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                {
+                    var errors = string.Join(", ", updateResult.Errors.Select(e => e.Description));
+                    throw new InvalidOperationException($"Failed to update profile: {errors}");
+                }
+            }
+
+            // Return fresh profile
+            user = await userManager.FindByIdAsync(userId);
 
             return new UserProfileDTO
             {

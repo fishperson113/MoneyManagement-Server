@@ -20,13 +20,16 @@ namespace API.Helpers
 
         public async Task<string> UploadUserAvatarAsync(string userId, IFormFile file)
         {
-            var filePath = $"user_avatars/{userId}/avatar.jpg";
+
+            string filePath = $"user_avatars/{userId}/avatar.jpg";
+            string encodedPath = Uri.EscapeDataString(filePath);
+            string firebaseUrl = $"https://firebasestorage.googleapis.com/v0/b/{_bucketName}/o/{encodedPath}?alt=media";
 
             using var stream = file.OpenReadStream();
             await _storageClient.UploadObjectAsync(_bucketName, filePath, file.ContentType, stream);
 
             // Create public URL
-            return $"https://storage.googleapis.com/{_bucketName}/{filePath}";
+            return firebaseUrl;
         }
     }
 }
