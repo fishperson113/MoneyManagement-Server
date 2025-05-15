@@ -511,16 +511,27 @@ namespace API.Repositories
                     }
                 }
 
+                var transactions = await query.OrderByDescending(t => t.TransactionDate).ToListAsync();
+
                 // Apply day of week filter
                 if (!string.IsNullOrEmpty(dayOfWeek))
                 {
-                    if (Enum.TryParse<DayOfWeek>(dayOfWeek, true, out var day))
+                    var dayOfWeekFull = dayOfWeek.ToLower() switch
                     {
-                        query = query.Where(t => t.TransactionDate.DayOfWeek == day);
-                    }
-                }
+                        "mon" => DayOfWeek.Monday,
+                        "tue" => DayOfWeek.Tuesday,
+                        "wed" => DayOfWeek.Wednesday,
+                        "thu" => DayOfWeek.Thursday,
+                        "fri" => DayOfWeek.Friday,
+                        "sat" => DayOfWeek.Saturday,
+                        "sun" => DayOfWeek.Sunday,
+                        _ => throw new ArgumentException($"Invalid dayOfWeek value: {dayOfWeek}")
+                    };
 
-                var transactions = await query.OrderByDescending(t => t.TransactionDate).ToListAsync();
+                    transactions = transactions
+                        .Where(t => t.TransactionDate.DayOfWeek == dayOfWeekFull)
+                        .ToList();
+                }
 
                 return _mapper.Map<IEnumerable<TransactionDetailDTO>>(transactions);
             }
