@@ -24,4 +24,9 @@
         public required string OtherUserName { get; set; }
         public List<MessageDTO>? Messages { get; set; }
     }
+    public class ChatSummaryDTO
+    {
+        public required MessageDTO LatestMessage { get; set; }
+        public int UnreadCount { get; set; }
+    }
 }

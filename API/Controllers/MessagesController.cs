@@ -205,6 +205,32 @@ namespace API.Controllers
                 return StatusCode(500, "Có lỗi xảy ra khi xóa tin nhắn.");
             }
         }
+        /// <summary>
+        /// Gets the newest message from each conversation for the current user
+        /// </summary>
+        /// <returns>Dictionary of user IDs and their most recent messages</returns>
+        /// <response code="200">Returns the map of latest messages</response>
+        /// <response code="401">If the user is not authenticated</response>
+        /// <response code="500">If there was an internal server error</response>
+        [HttpGet("latest")]
+        public async Task<IActionResult> GetAllLatestMessages()
+        {
+            try
+            {
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (userId == null)
+                    return Unauthorized();
 
-    } 
+                var latestMessages = await _messageRepository.GetAllLatestMessagesAsync(userId);
+                return Ok(latestMessages);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving latest messages");
+                return StatusCode(500, "Có lỗi xảy ra khi lấy tin nhắn mới nhất.");
+            }
+        }
+
+
+    }
 }

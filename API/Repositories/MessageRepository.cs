@@ -307,5 +307,77 @@ namespace API.Repositories
                 return false;
             }
         }
+        /// <summary>
+        /// Gets the most recent message from each conversation for a user
+        /// </summary>
+        /// <param name="userId">User ID</param>
+        /// <returns>Dictionary of other user IDs and their most recent messages</returns>
+        public async Task<Dictionary<string, ChatSummaryDTO>> GetAllLatestMessagesAsync(string userId)
+        {
+            try
+            {
+                _logger.LogInformation("Getting all latest messages and unread counts for user {UserId}", userId);
+
+                // Get all users that the current user has exchanged messages with
+                var chatPartners = await _dbContext.Messages
+                    .Where(m => m.SenderId == userId || m.ReceiverId == userId)
+                    .Select(m => m.SenderId == userId ? m.ReceiverId : m.SenderId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var result = new Dictionary<string, ChatSummaryDTO>();
+
+                foreach (var partnerId in chatPartners)
+                {
+                    var latestMessage = await _dbContext.Messages
+                        .Where(m => (m.SenderId == userId && m.ReceiverId == partnerId) ||
+                                    (m.SenderId == partnerId && m.ReceiverId == userId))
+                        .OrderByDescending(m => m.SentAt)
+                        .Include(m => m.Sender)
+                        .Include(m => m.Receiver)
+                        .FirstOrDefaultAsync();
+
+                    if (latestMessage != null)
+                    {
+                        // Create chat ID for Firestore lookup
+                        var chatId = string.CompareOrdinal(userId, partnerId) < 0
+                            ? $"{userId}_{partnerId}"
+                            : $"{partnerId}_{userId}";
+
+                        // Query Firestore for unread messages count
+                        var messagesRef = _firestoreDb.Collection("privateMessages")
+                            .Document(chatId)
+                            .Collection("messages");
+
+                        var query = messagesRef.WhereEqualTo("receiverId", userId).WhereEqualTo("isRead", false);
+                        var snapshot = await query.GetSnapshotAsync();
+                        var unreadCount = snapshot.Documents.Count;
+
+                        result[partnerId] = new ChatSummaryDTO
+                        {
+                            LatestMessage = new MessageDTO
+                            {
+                                MessageID = latestMessage.MessageID,
+                                SenderId = latestMessage.SenderId,
+                                ReceiverId = latestMessage.ReceiverId,
+                                Content = latestMessage.Content,
+                                SentAt = latestMessage.SentAt,
+                                SenderName = $"{latestMessage.Sender.FirstName} {latestMessage.Sender.LastName}",
+                                ReceiverName = $"{latestMessage.Receiver.FirstName} {latestMessage.Receiver.LastName}"
+                            },
+                            UnreadCount = unreadCount
+                        };
+                    }
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all latest messages with unread counts");
+                throw;
+            }
+        }
+
     }
 }

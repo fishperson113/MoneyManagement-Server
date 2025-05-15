@@ -190,7 +190,7 @@ namespace API.Controllers
         }
         [HttpPut("profile")]
         [Authorize]
-        public async Task<IActionResult> UpdateProfile([FromForm] UpdateUserDTO model)
+        public async Task<IActionResult> UpdateProfile(UpdateUserDTO model)
         {
             try
             {
