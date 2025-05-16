@@ -534,6 +534,7 @@ namespace API.Repositories
                 }
 
                 return _mapper.Map<IEnumerable<TransactionDetailDTO>>(transactions);
+
             }
             catch (Exception ex)
             {

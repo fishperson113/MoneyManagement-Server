@@ -137,6 +137,7 @@ namespace API.Helpers
 
             CreateMap<Transaction, TransactionDetailDTO>()
                .ForMember(dest => dest.TransactionID, opt => opt.MapFrom(src => src.TransactionID))
+               .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
                .ForMember(dest => dest.Date, opt => opt.MapFrom(src => src.TransactionDate.Date))
                .ForMember(dest => dest.Time, opt => opt.MapFrom(src => src.TransactionDate.ToString("HH:mm:ss")))
                .ForMember(dest => dest.DayOfWeek, opt => opt.MapFrom(src => src.TransactionDate.DayOfWeek.ToString()))

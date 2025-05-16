@@ -3,6 +3,7 @@
     public class TransactionDetailDTO
     {
         public Guid TransactionID { get; set; }
+        public DateTime TransactionDate { get; set; }
         public DateTime Date { get; set; }
         public string Time { get; set; } = string.Empty;
         public string DayOfWeek { get; set; } = string.Empty;
