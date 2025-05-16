@@ -371,19 +371,16 @@ namespace API.Repositories
 
                 // Group by category and calculate totals and percentages
                 var result = transactions
-                    .GroupBy(t => new { CategoryName = t.Category.Name, IsIncome = t.Amount > 0 })
+                    .GroupBy(t => t.Category.Name)
                     .Select(g => new CategoryBreakdownDTO
                     {
-                        Category = g.Key.CategoryName,
-                        IsIncome = g.Key.IsIncome,
-                        Total = g.Sum(t => Math.Abs(t.Amount)),
-                        Percentage = g.Key.IsIncome
-                            ? (totalIncome == 0 ? 0 : Math.Round(g.Sum(t => t.Amount) / totalIncome * 100, 2))
-                            : (totalExpense == 0 ? 0 : Math.Round(Math.Abs(g.Sum(t => t.Amount)) / totalExpense * 100, 2)),
-                        TotalIncome = totalIncome,
-                        TotalExpense = totalExpense
+                        Category = g.Key,
+                        TotalIncome = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                        TotalExpense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount)),
+                        IncomePercentage = totalIncome == 0 ? 0 : Math.Round(g.Where(t => t.Amount > 0).Sum(t => t.Amount) / totalIncome * 100, 2),
+                        ExpensePercentage = totalExpense == 0 ? 0 : Math.Round(Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount)) / totalExpense * 100, 2)
                     })
-                    .OrderByDescending(c => c.Total)
+                    .OrderByDescending(c => c.TotalIncome + c.TotalExpense) // Sort by total income + expense combined, you can adjust based on your sorting preference
                     .ToList();
 
                 return result;
@@ -626,7 +623,7 @@ namespace API.Repositories
                     .GroupBy(t => (startOfWeek.Day + 6 - (int)t.TransactionDate.DayOfWeek) / 7 + 1)
                     .Select(g => new WeeklyDetailDTO
                     {
-                        WeekNumber = $"{g.Key}st",
+                        WeekNumber = $"{g.Key}",
                         Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
                         Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
                     }).ToList();
