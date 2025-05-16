@@ -566,6 +566,15 @@ namespace API.Repositories
                     .Where(t => t.TransactionDate >= startOfDay && t.TransactionDate <= endOfDay && userWalletIds.Contains(t.WalletID))
                     .ToListAsync();
 
+                var dailyDetails = transactions
+                    .GroupBy(t => t.TransactionDate.DayOfWeek)
+                    .Select(g => new DailyDetailDTO
+                    {
+                        DayOfWeek = g.Key.ToString(),
+                        Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                        Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                    }).ToList();
+
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
 
@@ -574,6 +583,7 @@ namespace API.Repositories
                     Date = date.Date,
                     DayOfWeek = date.DayOfWeek.ToString(),
                     Month = date.ToString("MMMM"),
+                    DailyDetails = dailyDetails,
                     TotalIncome = income,
                     TotalExpenses = expenses,
                     Transactions = _mapper.Map<List<TransactionDetailDTO>>(transactions)
@@ -612,6 +622,15 @@ namespace API.Repositories
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
+                var weeklyDetails = transactions
+                    .GroupBy(t => (startOfWeek.Day + 6 - (int)t.TransactionDate.DayOfWeek) / 7 + 1)
+                    .Select(g => new WeeklyDetailDTO
+                    {
+                        WeekNumber = $"{g.Key}st",
+                        Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                        Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                    }).ToList();
+
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
                 var netCashFlow = income - expenses;
@@ -639,6 +658,7 @@ namespace API.Repositories
                     EndDate = endOfWeek,
                     WeekNumber = weekOfMonth,
                     Year = startOfWeek.Year,
+                    WeeklyDetails = weeklyDetails,
                     TotalIncome = income,
                     TotalExpenses = expenses,
                     NetCashFlow = netCashFlow,
@@ -682,6 +702,15 @@ namespace API.Repositories
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
+                var monthlyDetails = transactions
+                    .GroupBy(t => t.TransactionDate.ToString("MMMM"))
+                    .Select(g => new MonthlyDetailDTO
+                    {
+                        MonthName = g.Key,
+                        Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                        Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                    }).ToList();
+
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
                 var netCashFlow = income - expenses;
@@ -699,6 +728,7 @@ namespace API.Repositories
                     Month = yearMonth.Month,
                     Year = yearMonth.Year,
                     MonthName = yearMonth.ToString("MMMM"),
+                    MonthlyDetails = monthlyDetails,
                     TotalIncome = income,
                     TotalExpenses = expenses,
                     NetCashFlow = netCashFlow,
@@ -741,6 +771,15 @@ namespace API.Repositories
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
+                var yearlyDetails = transactions
+                    .GroupBy(t => t.TransactionDate.Year)
+                    .Select(g => new YearlyDetailDTO
+                    {
+                        Year = g.Key.ToString(),
+                        Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                        Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                    }).ToList();
+
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
                 var netCashFlow = income - expenses;
@@ -764,6 +803,7 @@ namespace API.Repositories
                 var result = new YearlySummaryDTO
                 {
                     Year = year,
+                    YearlyDetails = yearlyDetails,
                     TotalIncome = income,
                     TotalExpenses = expenses,
                     NetCashFlow = netCashFlow,

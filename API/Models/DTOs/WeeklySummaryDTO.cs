@@ -6,6 +6,7 @@
         public DateTime EndDate { get; set; }
         public int WeekNumber { get; set; }
         public int Year { get; set; }
+        public List<WeeklyDetailDTO> WeeklyDetails { get; set; }
         public decimal TotalIncome { get; set; }
         public decimal TotalExpenses { get; set; }
         public decimal NetCashFlow { get; set; }
