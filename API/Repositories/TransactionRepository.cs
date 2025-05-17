@@ -278,11 +278,16 @@ namespace API.Repositories
             try
             {
                 _logger.LogInformation("Fetching transactions for date range {StartDate} to {EndDate}", startDate, endDate);
+
                 var userId = GetCurrentUserId();
+
                 var userWalletIds = await _context.Wallets
                     .Where(w => w.UserId == userId)
                     .Select(w => w.WalletID)
                     .ToListAsync();
+
+                endDate = endDate.Date.AddDays(1).AddMilliseconds(-1);
+
                 var query = _context.Transactions
                      .Include(t => t.Category)
                      .Include(t => t.Wallet)
