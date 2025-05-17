@@ -145,6 +145,7 @@ namespace API.Helpers
                .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
                .ForMember(dest => dest.Category, opt => opt.MapFrom(src => src.Category.Name))
+               .ForMember(dest => dest.CategoryID, opt => opt.MapFrom(src => src.Category.CategoryID))
                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
                .ForMember(dest => dest.WalletName, opt => opt.MapFrom(src => src.Wallet.WalletName));

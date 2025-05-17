@@ -11,6 +11,7 @@
         public decimal Amount { get; set; }
         public string Type { get; set; } = string.Empty;
         public string Category { get; set; } = string.Empty;
+        public Guid CategoryID { get; set; }
         public string? Description { get; set; }
         public Guid WalletID { get; set; }
         public string WalletName { get; set; } = string.Empty;
