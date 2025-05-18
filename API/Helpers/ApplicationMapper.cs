@@ -197,9 +197,56 @@ namespace API.Helpers
                 .ForMember(dest => dest.AcceptedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.User, opt => opt.Ignore())
                 .ForMember(dest => dest.Friend, opt => opt.Ignore());
+            CreateMap<Group, GroupDTO>()
+            .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+            .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+            .ForMember(dest => dest.ImageUrl, opt => opt.MapFrom(src => src.ImageUrl))
+            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
+            .ForMember(dest => dest.CreatorId, opt => opt.MapFrom(src => src.CreatorId))
+            .ForMember(dest => dest.CreatorName, opt => opt.Ignore()) // Set manually after mapping
+            .ForMember(dest => dest.MemberCount, opt => opt.Ignore()) // Calculate after mapping
+            .ForMember(dest => dest.Role, opt => opt.Ignore());
 
-            // Simple self-mappings for DTOs that are created directly in the repository
-            CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
+            CreateMap<CreateGroupDTO, Group>()
+                .ForMember(dest => dest.GroupId, opt => opt.Ignore())
+                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.ImageUrl, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatorId, opt => opt.Ignore())
+                .ForMember(dest => dest.Creator, opt => opt.Ignore())
+                .ForMember(dest => dest.Members, opt => opt.Ignore())
+                .ForMember(dest => dest.Messages, opt => opt.Ignore());
+
+            // GroupMember mappings
+            CreateMap<GroupMember, GroupMemberDTO>()
+                .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.UserId))
+                .ForMember(dest => dest.DisplayName, opt => opt.Ignore()) // Set manually after mapping
+                .ForMember(dest => dest.AvatarUrl, opt => opt.Ignore())   // Set manually after mapping
+                .ForMember(dest => dest.JoinedAt, opt => opt.MapFrom(src => src.JoinedAt));
+
+            // GroupMessage mappings
+            CreateMap<GroupMessage, GroupMessageDTO>()
+                .ForMember(dest => dest.MessageId, opt => opt.MapFrom(src => src.MessageId))
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.SenderId, opt => opt.MapFrom(src => src.SenderId))
+                .ForMember(dest => dest.SenderName, opt => opt.Ignore()) // Set manually after mapping
+                .ForMember(dest => dest.SenderAvatarUrl, opt => opt.Ignore()) // Set manually after mapping
+                .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
+                .ForMember(dest => dest.SentAt, opt => opt.MapFrom(src => src.SentAt));
+
+            CreateMap<SendGroupMessageDTO, GroupMessage>()
+                .ForMember(dest => dest.MessageId, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.SenderId, opt => opt.Ignore())    // Set manually after mapping
+                .ForMember(dest => dest.Sender, opt => opt.Ignore())      // Loaded separately
+                .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
+                .ForMember(dest => dest.SentAt, opt => opt.Ignore())      // Set to current time
+                .ForMember(dest => dest.Group, opt => opt.Ignore());      // Loaded separately
+       
+        // Simple self-mappings for DTOs that are created directly in the repository
+        CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
             CreateMap<CashFlowSummaryDTO, CashFlowSummaryDTO>();
             CreateMap<DailySummaryDTO, DailySummaryDTO>();
             CreateMap<AggregateStatisticsDTO, AggregateStatisticsDTO>();

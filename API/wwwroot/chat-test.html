@@ -177,6 +177,57 @@
             color: white;
             background-color: #3498db;
         }
+        .modal {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            width: 400px;
+            max-width: 90%;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-danger {
+            background-color: #f44336;
+            color: white;
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .btn-secondary {
+            background-color: #999;
+            color: white;
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -190,6 +241,7 @@
     <div class="tabs">
         <div class="tab active" data-tab="messaging">Messaging</div>
         <div class="tab" data-tab="friends">Friends</div>
+        <div class="tab" data-tab="groups">Groups</div>
     </div>
 
     <div id="messaging" class="tab-content active">
@@ -230,6 +282,43 @@
     <div class="section">
         <h3>Events:</h3>
         <ul id="events"></ul>
+    </div>
+
+    <div id="groups" class="tab-content">
+        <div class="section">
+            <h3>Create Group</h3>
+            <input type="text" id="groupNameInput" placeholder="Group Name">
+            <input type="text" id="groupDescInput" placeholder="Description (optional)">
+            <button id="createGroupButton">Create Group</button>
+        </div>
+
+        <div class="section">
+            <h3>My Groups</h3>
+            <button id="loadGroupsButton">Load Groups</button>
+            <ul id="groupsList"></ul>
+        </div>
+
+        <div class="section">
+            <h3>Group Members</h3>
+            <div id="currentGroupInfo" style="display:none;">
+                <h4 id="currentGroupName"></h4>
+                <button id="addMemberButton" style="display:none;">Add Member</button>
+                <input type="text" id="newMemberIdInput" placeholder="User ID" style="display:none;">
+                <button id="submitAddMemberButton" style="display:none;">Add</button>
+            </div>
+            <ul id="groupMembers"></ul>
+        </div>
+    </div>
+
+    <div id="groupMessagingSection" class="section" style="display:none;">
+        <h3 id="groupChatHeader">Group Chat</h3>
+        <button id="backToChatsButton">Back to Chats</button>
+        <div id="groupMessages" class="message-list"></div>
+        <div class="message-input">
+            <input type="text" id="groupMessageInput" placeholder="Type a message">
+            <button id="sendGroupButton">Send</button>
+        </div>
+        <button id="leaveGroupButton" style="background-color: #f44336;">Leave Group</button>
     </div>
 
     <script>
@@ -342,6 +431,43 @@
             addEvent(`User ${userId} updated their avatar`);
         });
 
+        connection.on("ReceiveGroupMessage", (message) => {
+            if (currentActiveGroupId === message.groupId) {
+                displayGroupMessage(message);
+            } else {
+                addEvent(`New group message in ${message.groupId}`);
+            }
+
+            // If the sender's profile isn't cached, fetch it
+            if (!userProfiles[message.senderId]) {
+                getUserProfile(message.senderId);
+            }
+        });
+
+        connection.on("GroupMessagesRead", (groupId, userId) => {
+            addEvent(`User ${userId} read messages in group ${groupId}`);
+        });
+
+        connection.on("UserAddedToGroup", (group) => {
+            addEvent(`You were added to group: ${group.name}`);
+            loadGroups(); // Refresh groups list
+        });
+
+        connection.on("UserRemovedFromGroup", (groupId, userId) => {
+            addEvent(`User ${userId} was removed from group ${groupId}`);
+            if (userId === currentUserId) {
+                addEvent(`You were removed from group ${groupId}`);
+                loadGroups(); // Refresh groups list
+            }
+        });
+
+        connection.on("NewUnreadGroupMessages", (groupId) => {
+            addEvent(`You have unread messages in group ${groupId}`);
+        });
+
+
+        let currentActiveGroupId = null;
+
         // Connect button
         document.getElementById("connectButton").addEventListener("click", startConnection);
 
@@ -397,6 +523,414 @@
 
         // Load friends button
         document.getElementById("loadFriendsButton").addEventListener("click", loadFriends);
+
+        // Load groups button
+        document.getElementById("loadGroupsButton").addEventListener("click", loadGroups);
+
+        // Create group button
+        document.getElementById("createGroupButton").addEventListener("click", createGroup);
+
+        // Group member management
+        document.getElementById("addMemberButton").addEventListener("click", () => {
+            document.getElementById("newMemberIdInput").style.display = "block";
+            document.getElementById("submitAddMemberButton").style.display = "block";
+        });
+
+        document.getElementById("submitAddMemberButton").addEventListener("click", addMemberToGroup);
+
+        // Send group message button
+        document.getElementById("sendGroupButton").addEventListener("click", sendGroupMessage);
+
+        // Back button
+        document.getElementById("backToChatsButton").addEventListener("click", () => {
+            document.getElementById("groupMessagingSection").style.display = "none";
+            document.getElementById("messaging").querySelector(".section").style.display = "block";
+        });
+        document.getElementById("leaveGroupButton").addEventListener("click", () => {
+            if (currentActiveGroupId) {
+                if (confirm("Are you sure you want to leave this group?")) {
+                    leaveGroup(currentActiveGroupId);
+                }
+            }
+        });
+        // Group functions
+        async function loadGroups() {
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups`);
+                if (response.ok) {
+                    const groups = await response.json();
+                    displayGroups(groups);
+                    addEvent(`Loaded ${groups.length} groups`);
+                } else {
+                    addEvent(`Error loading groups: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        function displayGroups(groups) {
+            const list = document.getElementById("groupsList");
+            list.innerHTML = "";
+
+            if (groups.length === 0) {
+                list.innerHTML = "<li>No groups yet</li>";
+                return;
+            }
+
+            groups.forEach(group => {
+                const li = document.createElement("li");
+                li.className = "group-item";
+
+                const nameSpan = document.createElement("span");
+                nameSpan.textContent = `${group.name} (${group.memberCount} members)`;
+
+                const memberBtn = document.createElement("button");
+                memberBtn.textContent = "Members";
+                memberBtn.style.marginLeft = "10px";
+                memberBtn.onclick = () => loadGroupMembers(group.groupId, group.name, group.role === 2); // Check if role is Admin (2)
+
+                const chatBtn = document.createElement("button");
+                chatBtn.textContent = "Chat";
+                chatBtn.style.marginLeft = "5px";
+                chatBtn.onclick = () => openGroupChat(group.groupId, group.name);
+
+                const leaveBtn = document.createElement("button");
+                leaveBtn.textContent = "Leave";
+                leaveBtn.style.marginLeft = "5px";
+                leaveBtn.style.backgroundColor = "#f44336";
+                leaveBtn.onclick = () => {
+                    if (confirm("Are you sure you want to leave this group?")) {
+                        leaveGroup(group.groupId);
+                    }
+                };
+
+                li.appendChild(nameSpan);
+                li.appendChild(memberBtn);
+                li.appendChild(chatBtn);
+                li.appendChild(leaveBtn);
+                list.appendChild(li);
+            });
+        }
+
+        async function loadGroupMembers(groupId, groupName, isAdmin) {
+            try {
+                document.getElementById("currentGroupInfo").style.display = "block";
+                document.getElementById("currentGroupName").textContent = groupName;
+
+                if (isAdmin) {
+                    document.getElementById("addMemberButton").style.display = "block";
+                } else {
+                    document.getElementById("addMemberButton").style.display = "none";
+                    document.getElementById("newMemberIdInput").style.display = "none";
+                    document.getElementById("submitAddMemberButton").style.display = "none";
+                }
+
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups/${groupId}/members`);
+                if (response.ok) {
+                    const members = await response.json();
+                    displayGroupMembers(members, groupId, isAdmin);
+                } else {
+                    addEvent(`Error loading group members: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        function displayGroupMembers(members, groupId, isCurrentUserAdmin) {
+            const list = document.getElementById("groupMembers");
+            list.innerHTML = "";
+
+            if (members.length === 0) {
+                list.innerHTML = "<li>No members</li>";
+                return;
+            }
+
+            members.forEach(member => {
+                const li = document.createElement("li");
+                li.className = "member-item";
+
+                const nameSpan = document.createElement("span");
+                nameSpan.textContent = `${member.displayName} ${member.role === 2 ? '(Admin)' : ''}`;
+
+
+                li.appendChild(nameSpan);
+
+                if (isCurrentUserAdmin && !member.isAdmin) {
+                    const removeBtn = document.createElement("button");
+                    removeBtn.textContent = "Remove";
+                    removeBtn.style.marginLeft = "10px";
+                    removeBtn.onclick = () => removeGroupMember(groupId, member.userId);
+                    li.appendChild(removeBtn);
+                }
+
+                list.appendChild(li);
+            });
+        }
+
+        async function createGroup() {
+            const name = document.getElementById("groupNameInput").value;
+            const description = document.getElementById("groupDescInput").value;
+
+            if (!name) {
+                addEvent("Please enter a group name");
+                return;
+            }
+
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        description: description,
+                        initialMemberIds: [] // Optional: Add initial members
+                    })
+                });
+
+                if (response.ok) {
+                    const group = await response.json();
+                    addEvent(`Group created: ${group.name}`);
+                    document.getElementById("groupNameInput").value = "";
+                    document.getElementById("groupDescInput").value = "";
+                    loadGroups();
+                } else {
+                    addEvent(`Error creating group: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        async function addMemberToGroup() {
+            const groupNameElement = document.getElementById("currentGroupName");
+            const groupName = groupNameElement.textContent;
+            const userId = document.getElementById("newMemberIdInput").value;
+
+            if (!userId) {
+                addEvent("Please enter a user ID");
+                return;
+            }
+
+            // We need to find the group ID from the group name
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups`);
+                if (response.ok) {
+                    const groups = await response.json();
+                    const group = groups.find(g => g.name === groupName);
+
+                    if (group) {
+                        await addMember(group.groupId, userId);
+                    } else {
+                        addEvent("Group not found");
+                    }
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        async function addMember(groupId, userId) {
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups/${groupId}/members/${userId}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    addEvent(`User ${userId} added to group`);
+                    document.getElementById("newMemberIdInput").value = "";
+                    document.getElementById("newMemberIdInput").style.display = "none";
+                    document.getElementById("submitAddMemberButton").style.display = "none";
+
+                    // Reload members list
+                    const groupNameElement = document.getElementById("currentGroupName");
+                    loadGroupMembers(groupId, groupNameElement.textContent, true);
+                } else {
+                    addEvent(`Error adding member: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        async function removeGroupMember(groupId, userId) {
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups/${groupId}/members/${userId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    addEvent(`User ${userId} removed from group`);
+
+                    // Reload members list
+                    const groupNameElement = document.getElementById("currentGroupName");
+                    loadGroupMembers(groupId, groupNameElement.textContent, true);
+                } else {
+                    addEvent(`Error removing member: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        async function openGroupChat(groupId, groupName) {
+            try {
+                // Join the SignalR group for real-time messages
+                await connection.invoke("JoinGroupChat", groupId);
+
+                // Mark messages as read
+                await fetchWithAuth(`${apiBaseUrl}/groups/${groupId}/read`, {
+                    method: 'POST'
+                });
+
+                // Get chat history
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups/${groupId}/messages`);
+
+                if (response.ok) {
+                    const chatHistory = await response.json();
+
+                    // Hide private messaging section, show group messaging
+                    document.getElementById("messaging").querySelector(".section").style.display = "none";
+
+                    const groupSection = document.getElementById("groupMessagingSection");
+                    groupSection.style.display = "block";
+                    document.getElementById("groupChatHeader").textContent = `Group Chat: ${groupName}`;
+
+                    // Update current active group
+                    currentActiveGroupId = groupId;
+
+                    // Display messages
+                    const messagesContainer = document.getElementById("groupMessages");
+                    messagesContainer.innerHTML = "";
+
+                    if (chatHistory.messages && chatHistory.messages.length > 0) {
+                        chatHistory.messages.forEach(message => {
+                            displayGroupMessage(message);
+                        });
+                    } else {
+                        messagesContainer.innerHTML = "<div style='text-align:center;padding:10px;'>No messages yet</div>";
+                    }
+
+                    addEvent(`Loaded group chat with ${chatHistory.messages?.length || 0} messages`);
+                } else {
+                    addEvent(`Error loading group chat: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        async function sendGroupMessage() {
+            if (!currentActiveGroupId) {
+                addEvent("No active group selected");
+                return;
+            }
+
+            const content = document.getElementById("groupMessageInput").value;
+            if (!content) return;
+
+            try {
+                // Use SignalR for real-time delivery
+                await connection.invoke("SendMessageToGroup", {
+                    groupId: currentActiveGroupId,
+                    content: content
+                });
+
+                document.getElementById("groupMessageInput").value = "";
+            } catch (err) {
+                // If SignalR fails, try REST API
+                addEvent(`SignalR error, using REST API: ${err}`);
+
+                try {
+                    const response = await fetchWithAuth(`${apiBaseUrl}/groups/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            groupId: currentActiveGroupId,
+                            content: content
+                        })
+                    });
+
+                    if (response.ok) {
+                        document.getElementById("groupMessageInput").value = "";
+                    } else {
+                        addEvent(`Error sending message: ${response.status}`);
+                    }
+                } catch (apiErr) {
+                    addEvent(`API Error: ${apiErr}`);
+                }
+            }
+        }
+
+        function displayGroupMessage(message) {
+            const isFromCurrentUser = message.senderId === currentUserId;
+            const messageDiv = document.createElement("div");
+            messageDiv.className = isFromCurrentUser ? 'message-sent' : 'message-received';
+
+            // Format date
+            const sentDate = new Date(message.sentAt);
+            const timeString = sentDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const dateString = sentDate.toLocaleDateString();
+
+            // Create avatar
+            const avatar = document.createElement("div");
+            avatar.className = "message-avatar";
+            avatar.dataset.userId = message.senderId;
+
+            const profile = userProfiles[message.senderId];
+            if (profile && profile.avatarUrl) {
+                avatar.style.backgroundImage = `url(${profile.avatarUrl})`;
+            } else {
+                avatar.classList.add('default-avatar');
+                avatar.textContent = (message.senderName || "?").charAt(0).toUpperCase();
+                // Try to fetch this user's profile if we don't have it
+                if (!userProfiles[message.senderId]) {
+                    getUserProfile(message.senderId);
+                }
+            }
+
+            // Message bubble
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble";
+
+            // Sender name
+            const nameSpan = document.createElement('div');
+            nameSpan.className = "message-sender";
+            nameSpan.textContent = isFromCurrentUser ? 'You' : message.senderName;
+
+            // Message content
+            const contentSpan = document.createElement('div');
+            contentSpan.className = "message-content";
+            contentSpan.textContent = message.content;
+
+            // Time
+            const timeSpan = document.createElement('div');
+            timeSpan.className = "message-time";
+            timeSpan.textContent = `${timeString} ${dateString}`;
+
+            // Put it all together
+            const messageInfo = document.createElement('div');
+            messageInfo.className = "message-info";
+            messageInfo.appendChild(nameSpan);
+            messageInfo.appendChild(timeSpan);
+
+            bubble.appendChild(messageInfo);
+            bubble.appendChild(contentSpan);
+
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(bubble);
+
+            document.getElementById("groupMessages").appendChild(messageDiv);
+
+            // Scroll to bottom
+            const messagesContainer = document.getElementById("groupMessages");
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
 
         async function getUserProfile(userId) {
             try {
@@ -771,6 +1305,155 @@
             li.textContent = event;
             document.getElementById("events").appendChild(li);
         }
+
+        // New function to handle admin leaving a group
+        async function adminLeaveGroup(groupId, deleteGroup = false) {
+            try {
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups/${groupId}/admin-leave?deleteGroup=${deleteGroup}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+
+                    if (result.action === "delete") {
+                        addEvent(`Group has been deleted.`);
+                    } else if (result.action === "leave") {
+                        addEvent(`You've left the group. New admin is user ${result.newAdminId}.`);
+                    }
+
+                    // Refresh groups list and return to messaging
+                    loadGroups();
+
+                    if (currentActiveGroupId === groupId) {
+                        document.getElementById("groupMessagingSection").style.display = "none";
+                        document.getElementById("messaging").querySelector(".section").style.display = "block";
+                        currentActiveGroupId = null;
+                    }
+
+                    return true;
+                } else {
+                    const errorText = await response.text();
+                    addEvent(`Error: ${response.status} - ${errorText}`);
+                    return false;
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+                return false;
+            }
+        }
+
+        // Update the leaveGroup function to handle admin vs. regular members differently
+        async function leaveGroup(groupId) {
+            try {
+                // First check if user is an admin
+                const response = await fetchWithAuth(`${apiBaseUrl}/groups/${groupId}/members`);
+
+                if (response.ok) {
+                    const members = await response.json();
+                    const currentUser = members.find(m => m.userId === currentUserId);
+
+                    // If admin, show admin leave dialog
+                    if (currentUser && currentUser.role === 2) {
+                        showAdminLeaveDialog(groupId);
+                        return;
+                    }
+
+                    // Otherwise proceed with regular leave
+                    const leaveResponse = await fetchWithAuth(`${apiBaseUrl}/groups/${groupId}/leave`, {
+                        method: 'POST'
+                    });
+
+                    if (leaveResponse.ok) {
+                        addEvent(`You have left the group.`);
+                        loadGroups(); // Refresh groups list
+
+                        // If currently in this group's chat, go back to main chat view
+                        if (currentActiveGroupId === groupId) {
+                            document.getElementById("groupMessagingSection").style.display = "none";
+                            document.getElementById("messaging").querySelector(".section").style.display = "block";
+                            currentActiveGroupId = null;
+                        }
+                    } else {
+                        addEvent(`Error leaving group: ${leaveResponse.status}`);
+                    }
+                } else {
+                    addEvent(`Error getting group members: ${response.status}`);
+                }
+            } catch (err) {
+                addEvent(`Error: ${err}`);
+            }
+        }
+
+        // Function to show admin leave options dialog
+        function showAdminLeaveDialog(groupId) {
+            // Create modal dialog
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.left = '0';
+            modal.style.top = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+            modal.style.display = 'flex';
+            modal.style.justifyContent = 'center';
+            modal.style.alignItems = 'center';
+            modal.style.zIndex = '1000';
+
+            // Create dialog content
+            const dialog = document.createElement('div');
+            dialog.style.backgroundColor = 'white';
+            dialog.style.padding = '20px';
+            dialog.style.borderRadius = '5px';
+            dialog.style.width = '400px';
+            dialog.style.maxWidth = '90%';
+            dialog.style.textAlign = 'center';
+
+            const title = document.createElement('h3');
+            title.textContent = 'Admin Leave Options';
+
+            const message = document.createElement('p');
+            message.textContent = 'As an admin, you have two options when leaving this group:';
+
+            const leaveBtn = document.createElement('button');
+            leaveBtn.textContent = 'Leave and Assign New Admin';
+            leaveBtn.style.marginRight = '10px';
+            leaveBtn.style.padding = '8px 16px';
+            leaveBtn.onclick = async () => {
+                modal.remove();
+                await adminLeaveGroup(groupId, false);
+            };
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Delete the Group';
+            deleteBtn.style.backgroundColor = '#f44336';
+            deleteBtn.style.padding = '8px 16px';
+            deleteBtn.onclick = async () => {
+                modal.remove();
+                await adminLeaveGroup(groupId, true);
+            };
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.style.marginTop = '20px';
+            cancelBtn.style.backgroundColor = '#999';
+            cancelBtn.style.padding = '8px 16px';
+            cancelBtn.onclick = () => {
+                modal.remove();
+            };
+
+            dialog.appendChild(title);
+            dialog.appendChild(message);
+            dialog.appendChild(leaveBtn);
+            dialog.appendChild(deleteBtn);
+            dialog.appendChild(document.createElement('br'));
+            dialog.appendChild(cancelBtn);
+
+            modal.appendChild(dialog);
+            document.body.appendChild(modal);
+        }
+
+
     </script>
 </body>
 </html>

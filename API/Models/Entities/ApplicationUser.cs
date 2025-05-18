@@ -18,6 +18,8 @@ namespace API.Models.Entities
 
         public ICollection<UserFriend> FriendRequestsReceived { get; set; } = new List<UserFriend>();
 
-
+        public ICollection<Group> CreatedGroups { get; set; } = new List<Group>();
+        public ICollection<GroupMember> GroupMemberships { get; set; } = new List<GroupMember>();
+        public ICollection<GroupMessage> GroupMessagesSent { get; set; } = new List<GroupMessage>();
     }
 }

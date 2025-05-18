@@ -12,6 +12,12 @@ namespace API.Models.Entities
         Task FriendRequestReceived(FriendRequestDTO request);
         Task FriendRequestAccepted(string userId);
         Task UserAvatarUpdated(string userId, string newAvatarUrl);
-
+        Task ReceiveGroupMessage(GroupMessageDTO message);
+        Task GroupMessagesRead(Guid groupId, string userId);
+        Task UserAddedToGroup(GroupDTO group);
+        Task UserRemovedFromGroup(Guid groupId, string userId);
+        Task NewUnreadGroupMessages(Guid groupId);
+        Task UserRoleChanged(Guid groupId, string userId, GroupRole newRole);
+        Task GroupDeleted(Guid groupId);
     }
 }

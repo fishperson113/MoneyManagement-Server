@@ -16,6 +16,9 @@ namespace API.Data
         public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
         public DbSet<Message> Messages { get; set; } = null!;
         public DbSet<UserFriend> UserFriends { get; set; } = null!;
+        public DbSet<Group> Groups { get; set; } = null!;
+        public DbSet<GroupMember> GroupMembers { get; set; } = null!;
+        public DbSet<GroupMessage> GroupMessages { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -123,6 +126,35 @@ namespace API.Data
                 .WithMany(u => u.FriendRequestsReceived)
                 .HasForeignKey(uf => uf.FriendId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Group relationships
+            modelBuilder.Entity<Group>()
+                .HasOne(g => g.Creator)
+                .WithMany(u => u.CreatedGroups)
+                .HasForeignKey(g => g.CreatorId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            // GroupMember relationships
+            modelBuilder.Entity<GroupMember>()
+                .HasOne(gm => gm.Group)
+                .WithMany(g => g.Members)
+                .HasForeignKey(gm => gm.GroupId);
+
+            modelBuilder.Entity<GroupMember>()
+                .HasOne(gm => gm.User)
+                .WithMany(u => u.GroupMemberships)
+                .HasForeignKey(gm => gm.UserId);
+
+            // GroupMessage relationships
+            modelBuilder.Entity<GroupMessage>()
+                .HasOne(gm => gm.Group)
+                .WithMany(g => g.Messages)
+                .HasForeignKey(gm => gm.GroupId);
+
+            modelBuilder.Entity<GroupMessage>()
+                .HasOne(gm => gm.Sender)
+                .WithMany(u => u.GroupMessagesSent)
+                .HasForeignKey(gm => gm.SenderId);
         }
     }
 }

@@ -1,0 +1,674 @@
+﻿// API/Repositories/GroupRepository.cs
+using API.Data;
+using API.Models.DTOs;
+using API.Models.Entities;
+using AutoMapper;
+using Google.Cloud.Firestore;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+
+namespace API.Repositories
+{
+    public class GroupRepository
+    {
+        private readonly ApplicationDbContext _dbContext;
+        private readonly IMapper _mapper;
+        private readonly ILogger<GroupRepository> _logger;
+        private readonly FirestoreDb _firestoreDb;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+
+        public GroupRepository(
+            ApplicationDbContext dbContext,
+            IMapper mapper,
+            ILogger<GroupRepository> logger,
+            FirestoreDb firestoreDb,
+            IHttpContextAccessor httpContextAccessor)
+        {
+            _dbContext = dbContext;
+            _mapper = mapper;
+            _logger = logger;
+            _firestoreDb = firestoreDb;
+            _httpContextAccessor = httpContextAccessor;
+        }
+
+        private string GetCurrentUserId()
+        {
+            return _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? throw new UnauthorizedAccessException("User is not authenticated");
+        }
+
+        public async Task<GroupDTO> CreateGroupAsync(string creatorId, CreateGroupDTO dto)
+        {
+            try
+            {
+                _logger.LogInformation("Creating group {GroupName} by user {UserId}", dto.Name, creatorId);
+
+                // Create and map the group
+                var group = new Group
+                {
+                    GroupId = Guid.NewGuid(),
+                    CreatorId = creatorId,
+                    CreatedAt = DateTime.UtcNow,
+                    Name = dto.Name,
+                    Description = dto.Description
+                };
+
+                _dbContext.Groups.Add(group);
+
+                // Add creator as first admin member
+                var creatorMember = new GroupMember
+                {
+                    Id = Guid.NewGuid(),
+                    GroupId = group.GroupId,
+                    UserId = creatorId,
+                    Role = GroupRole.Admin,
+                    JoinedAt = DateTime.UtcNow
+                };
+
+                _dbContext.GroupMembers.Add(creatorMember);
+
+                // Add initial members if provided
+                if (dto.InitialMemberIds != null && dto.InitialMemberIds.Count > 0)
+                {
+                    foreach (var memberId in dto.InitialMemberIds.Where(id => id != creatorId))
+                    {
+                        var member = new GroupMember
+                        {
+                            Id = Guid.NewGuid(),
+                            GroupId = group.GroupId,
+                            UserId = memberId,
+                            Role = GroupRole.Admin,
+                            JoinedAt = DateTime.UtcNow
+                        };
+
+                        _dbContext.GroupMembers.Add(member);
+                    }
+                }
+
+                await _dbContext.SaveChangesAsync();
+
+                // Create group in Firestore for real-time access
+                await _firestoreDb.Collection("groups")
+                    .Document(group.GroupId.ToString())
+                    .SetAsync(new
+                    {
+                        groupId = group.GroupId.ToString(),
+                        name = group.Name,
+                        description = group.Description,
+                        creatorId = group.CreatorId,
+                        createdAt = group.CreatedAt
+                    });
+
+                // Load creator info for response
+                await _dbContext.Entry(group).Reference(g => g.Creator).LoadAsync();
+
+                // Get the member count for the DTO
+                var memberCount = await _dbContext.GroupMembers
+                    .CountAsync(m => m.GroupId == group.GroupId);
+
+                // Map to DTO with additional properties
+                var groupDto = _mapper.Map<GroupDTO>(group);
+                groupDto.CreatorName = $"{group.Creator.FirstName} {group.Creator.LastName}";
+                groupDto.MemberCount = memberCount;
+                groupDto.Role = GroupRole.Admin; // Creator is always admin
+
+                return groupDto;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating group");
+                throw;
+            }
+        }
+
+        public async Task<GroupMessageDTO> SendGroupMessageAsync(string senderId, SendGroupMessageDTO dto)
+        {
+            try
+            {
+                _logger.LogInformation("Sending group message from {SenderId} to group {GroupId}", senderId, dto.GroupId);
+
+                // Verify user is a member of the group
+                var isMember = await _dbContext.GroupMembers
+                    .AnyAsync(m => m.GroupId == dto.GroupId && m.UserId == senderId);
+
+                if (!isMember)
+                    throw new UnauthorizedAccessException("User is not a member of this group");
+
+                // Create message using AutoMapper
+                var message = _mapper.Map<GroupMessage>(dto);
+                message.MessageId = Guid.NewGuid();
+                message.SenderId = senderId;
+                message.SentAt = DateTime.UtcNow;
+
+                _dbContext.GroupMessages.Add(message);
+                await _dbContext.SaveChangesAsync();
+
+                // Store in Firestore for real-time functionality
+                await _firestoreDb.Collection("groups")
+                    .Document(dto.GroupId.ToString())
+                    .Collection("messages")
+                    .Document(message.MessageId.ToString())
+                    .SetAsync(new
+                    {
+                        messageId = message.MessageId.ToString(),
+                        groupId = message.GroupId.ToString(),
+                        senderId = message.SenderId,
+                        content = message.Content,
+                        sentAt = message.SentAt
+                    });
+
+                // Load sender info
+                await _dbContext.Entry(message).Reference(m => m.Sender).LoadAsync();
+
+                // Map to DTO with sender details
+                var messageDto = _mapper.Map<GroupMessageDTO>(message);
+                messageDto.SenderName = $"{message.Sender.FirstName} {message.Sender.LastName}";
+                messageDto.SenderAvatarUrl = message.Sender.AvatarUrl;
+
+                return messageDto;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending group message");
+                throw;
+            }
+        }
+
+        public async Task<List<GroupDTO>> GetUserGroupsAsync(string userId)
+        {
+            try
+            {
+                _logger.LogInformation("Getting groups for user {UserId}", userId);
+
+                var groupMembers = await _dbContext.GroupMembers
+                    .Where(m => m.UserId == userId)
+                    .Include(m => m.Group)
+                    .ThenInclude(g => g.Creator)
+                    .Select(m => new { GroupMember = m, Group = m.Group })
+                    .ToListAsync();
+
+                var groups = new List<GroupDTO>();
+
+                foreach (var item in groupMembers)
+                {
+                    var group = _mapper.Map<GroupDTO>(item.Group);
+
+                    // Set additional properties that aren't auto-mapped
+                    group.CreatorName = $"{item.Group.Creator.FirstName} {item.Group.Creator.LastName}";
+                    group.MemberCount = await _dbContext.GroupMembers.CountAsync(m => m.GroupId == item.Group.GroupId);
+                    group.Role = item.GroupMember.Role;
+
+                    groups.Add(group);
+                }
+
+                return groups;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting user groups");
+                throw;
+            }
+        }
+
+        public async Task<GroupChatHistoryDTO> GetGroupChatHistoryAsync(string userId, Guid groupId)
+        {
+            try
+            {
+                _logger.LogInformation("Getting chat history for group {GroupId} for user {UserId}", groupId, userId);
+
+                // Verify user is a member of the group
+                var membership = await _dbContext.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == userId);
+
+                if (membership == null)
+                    throw new UnauthorizedAccessException("User is not a member of this group");
+
+                // Get group details
+                var group = await _dbContext.Groups
+                    .FirstOrDefaultAsync(g => g.GroupId == groupId);
+
+                if (group == null)
+                    throw new KeyNotFoundException($"Group with ID {groupId} not found");
+
+                // Get messages with sender info
+                var messages = await _dbContext.GroupMessages
+                    .Where(m => m.GroupId == groupId)
+                    .Include(m => m.Sender)
+                    .OrderBy(m => m.SentAt)
+                    .Take(100) // Limit to recent messages
+                    .ToListAsync();
+
+                // Map to DTOs
+                var messagesDto = _mapper.Map<List<GroupMessageDTO>>(messages);
+
+                // Fill in sender details for each message
+                for (int i = 0; i < messages.Count; i++)
+                {
+                    messagesDto[i].SenderName = $"{messages[i].Sender.FirstName} {messages[i].Sender.LastName}";
+                    messagesDto[i].SenderAvatarUrl = messages[i].Sender.AvatarUrl;
+                }
+
+                // Calculate unread messages
+                int unreadCount = 0;
+                if (membership.LastReadTime.HasValue)
+                {
+                    unreadCount = messages.Count(m => m.SentAt > membership.LastReadTime.Value && m.SenderId != userId);
+                }
+                else
+                {
+                    unreadCount = messages.Count(m => m.SenderId != userId);
+                }
+
+                // Create DTO for response
+                var chatHistory = new GroupChatHistoryDTO
+                {
+                    GroupId = group.GroupId,
+                    GroupName = group.Name,
+                    GroupImageUrl = group.ImageUrl,
+                    Messages = messagesDto,
+                    UnreadCount = unreadCount
+                };
+
+                return chatHistory;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting group chat history");
+                throw;
+            }
+        }
+
+        public async Task<bool> MarkGroupMessagesAsReadAsync(string userId, Guid groupId)
+        {
+            try
+            {
+                _logger.LogInformation("Marking messages as read in group {GroupId} for user {UserId}", groupId, userId);
+
+                var membership = await _dbContext.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == userId);
+
+                if (membership == null)
+                    return false;
+
+                // Update last read time
+                membership.LastReadTime = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync();
+
+                // Update in Firestore
+                await _firestoreDb.Collection("groups")
+                    .Document(groupId.ToString())
+                    .Collection("readReceipts")
+                    .Document(userId)
+                    .SetAsync(new
+                    {
+                        userId = userId,
+                        lastReadTime = membership.LastReadTime
+                    });
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking group messages as read");
+                return false;
+            }
+        }
+
+        public async Task<List<GroupMemberDTO>> GetGroupMembersAsync(string userId, Guid groupId)
+        {
+            try
+            {
+                _logger.LogInformation("Getting members for group {GroupId}", groupId);
+
+                // Verify user is a member of the group
+                var isMember = await _dbContext.GroupMembers
+                    .AnyAsync(m => m.GroupId == groupId && m.UserId == userId);
+
+                if (!isMember)
+                    throw new UnauthorizedAccessException("User is not a member of this group");
+
+                // Get members with user details
+                var members = await _dbContext.GroupMembers
+                    .Where(m => m.GroupId == groupId)
+                    .Include(m => m.User)
+                    .ToListAsync();
+
+                // Map to DTOs and add display name
+                var membersDto = _mapper.Map<List<GroupMemberDTO>>(members);
+
+                // Update display names from user data
+                for (int i = 0; i < members.Count; i++)
+                {
+                    membersDto[i].DisplayName = $"{members[i].User.FirstName} {members[i].User.LastName}";
+                    membersDto[i].AvatarUrl = members[i].User.AvatarUrl;
+                }
+
+                return membersDto;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting group members");
+                throw;
+            }
+        }
+
+        public async Task<bool> AddUserToGroupAsync(string adminUserId, Guid groupId, string newUserId)
+        {
+            try
+            {
+                _logger.LogInformation("Adding user {NewUserId} to group {GroupId} by admin {AdminUserId}",
+                    newUserId, groupId, adminUserId);
+
+                // Verify the current user is an admin or collaborator of the group
+                var adminMember = await _dbContext.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == adminUserId);
+
+                if (adminMember == null || adminMember.Role < GroupRole.Collaborator)
+                    throw new UnauthorizedAccessException("Only group admins or collaborators can add members");
+
+                // Check if user is already a member
+                var isAlreadyMember = await _dbContext.GroupMembers
+                    .AnyAsync(m => m.GroupId == groupId && m.UserId == newUserId);
+
+                if (isAlreadyMember)
+                    return false; // Already a member
+
+                // Add the new member
+                var member = new GroupMember
+                {
+                    Id = Guid.NewGuid(),
+                    GroupId = groupId,
+                    UserId = newUserId,
+                    Role = GroupRole.Member,
+                    JoinedAt = DateTime.UtcNow
+                };
+
+                _dbContext.GroupMembers.Add(member);
+                await _dbContext.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding user to group");
+                throw;
+            }
+        }
+
+
+        public async Task<bool> RemoveUserFromGroupAsync(string adminUserId, Guid groupId, string userToRemoveId)
+        {
+            try
+            {
+                _logger.LogInformation("Removing user {UserToRemoveId} from group {GroupId} by user {AdminUserId}",
+                    userToRemoveId, groupId, adminUserId);
+
+                // Special case: user removing themselves (leaving group)
+                bool isSelfRemoval = adminUserId == userToRemoveId;
+
+                // Find the membership to remove
+                var memberToRemove = await _dbContext.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == userToRemoveId);
+
+                if (memberToRemove == null)
+                    return false; // Not a member
+
+                // If not self-removal, check if admin
+                if (!isSelfRemoval)
+                {
+                    // Verify the current user is an admin or collaborator of the group
+                    var adminMember = await _dbContext.GroupMembers
+                        .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == adminUserId);
+
+                    if (adminMember == null || adminMember.Role < GroupRole.Collaborator)
+                        throw new UnauthorizedAccessException("Only group admins or collaborators can remove members");
+
+                    // Collaborators can't remove admins
+                    if (adminMember.Role == GroupRole.Collaborator && memberToRemove.Role == GroupRole.Admin)
+                        throw new UnauthorizedAccessException("Collaborators cannot remove admins");
+                }
+
+                // Check if removing the last admin (only applies to admin self-removal)
+                if (memberToRemove.Role == GroupRole.Admin && isSelfRemoval)
+                {
+                    var adminCount = await _dbContext.GroupMembers
+                        .CountAsync(m => m.GroupId == groupId && m.Role == GroupRole.Admin);
+
+                    if (adminCount <= 1)
+                        throw new InvalidOperationException("As the last admin, you must use the admin leave process");
+                }
+
+                // Remove the member
+                _dbContext.GroupMembers.Remove(memberToRemove);
+                await _dbContext.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing user from group");
+                throw;
+            }
+        }
+
+
+        public async Task<bool> UpdateGroupAsync(string adminUserId, Guid groupId, UpdateGroupDTO dto)
+        {
+            try
+            {
+                _logger.LogInformation("Updating group {GroupId} by admin {AdminUserId}",
+                    groupId, adminUserId);
+
+                // Verify the current user is an admin of the group
+                var isAdmin = await _dbContext.GroupMembers
+                    .AnyAsync(m => m.GroupId == groupId && m.UserId == adminUserId && m.Role == GroupRole.Admin);
+                if (!isAdmin)
+                    throw new UnauthorizedAccessException("Only group admins can update group");
+
+                // Find the group
+                var group = await _dbContext.Groups.FindAsync(groupId);
+
+                if (group == null)
+                    throw new KeyNotFoundException($"Group with ID {groupId} not found");
+
+                // Update properties
+                if (!string.IsNullOrWhiteSpace(dto.Name))
+                    group.Name = dto.Name;
+
+                if (dto.Description != null) // Allow empty string to clear description
+                    group.Description = dto.Description;
+
+                await _dbContext.SaveChangesAsync();
+
+                // Update in Firestore
+                await _firestoreDb.Collection("groups")
+                    .Document(groupId.ToString())
+                    .UpdateAsync(new Dictionary<string, object>
+                    {
+                        { "name", group.Name },
+                        { "description", group.Description ?? "" }
+                    });
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating group");
+                throw;
+            }
+        }
+        /// <summary>
+        /// Assigns a collaborator role to a group member
+        /// </summary>
+        public async Task<bool> AssignCollaboratorRoleAsync(string adminUserId, Guid groupId, string userId)
+        {
+            try
+            {
+                _logger.LogInformation("Assigning collaborator role in group {GroupId} to user {UserId} by admin {AdminId}",
+                    groupId, userId, adminUserId);
+
+                // Verify the current user is an admin of the group
+                var adminMember = await _dbContext.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == adminUserId);
+
+                if (adminMember == null || adminMember.Role != GroupRole.Admin)
+                    throw new UnauthorizedAccessException("Only group admins can assign roles");
+
+                // Find the member to promote
+                var member = await _dbContext.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == userId);
+
+                if (member == null)
+                    throw new KeyNotFoundException($"User {userId} is not a member of this group");
+
+                // Assign collaborator role
+                member.Role = GroupRole.Collaborator;
+                await _dbContext.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error assigning collaborator role");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Deletes a group entirely
+        /// </summary>
+        public async Task<bool> DeleteGroupAsync(string adminUserId, Guid groupId)
+        {
+            try
+            {
+                _logger.LogInformation("Deleting group {GroupId} by admin {AdminId}", groupId, adminUserId);
+
+                // Verify the current user is an admin of the group
+                var adminMember = await _dbContext.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == adminUserId);
+
+                if (adminMember == null || adminMember.Role != GroupRole.Admin)
+                    throw new UnauthorizedAccessException("Only group admins can delete groups");
+
+                // Find the group
+                var group = await _dbContext.Groups
+                    .Include(g => g.Members)
+                    .Include(g => g.Messages)
+                    .FirstOrDefaultAsync(g => g.GroupId == groupId);
+
+                if (group == null)
+                    throw new KeyNotFoundException($"Group with ID {groupId} not found");
+
+                // Begin transaction since we're deleting multiple related entities
+                using var transaction = await _dbContext.Database.BeginTransactionAsync();
+                try
+                {
+                    // Remove all messages
+                    _dbContext.GroupMessages.RemoveRange(group.Messages);
+
+                    // Remove all memberships
+                    _dbContext.GroupMembers.RemoveRange(group.Members);
+
+                    // Remove the group
+                    _dbContext.Groups.Remove(group);
+
+                    await _dbContext.SaveChangesAsync();
+
+                    // Also delete from Firestore
+                    await _firestoreDb.Collection("groups")
+                        .Document(groupId.ToString())
+                        .DeleteAsync();
+
+                    await transaction.CommitAsync();
+
+                    return true;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting group");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Handles admin leaving a group with automatic role succession
+        /// </summary>
+        public async Task<AdminLeaveResult> AdminLeaveGroupAsync(string adminUserId, Guid groupId, bool deleteGroup)
+        {
+            try
+            {
+                _logger.LogInformation("Admin {AdminId} leaving group {GroupId}, deleteGroup={DeleteGroup}",
+                    adminUserId, groupId, deleteGroup);
+
+                // Verify user is an admin
+                var adminMember = await _dbContext.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == adminUserId);
+
+                if (adminMember == null)
+                    throw new KeyNotFoundException("User is not a member of this group");
+
+                if (adminMember.Role != GroupRole.Admin)
+                    throw new UnauthorizedAccessException("Only admins can use this function");
+
+                // If delete option is selected, delete the group entirely
+                if (deleteGroup)
+                {
+                    var deleted = await DeleteGroupAsync(adminUserId, groupId);
+                    return new AdminLeaveResult
+                    {
+                        Success = deleted,
+                        Action = "delete",
+                        GroupId = groupId
+                    };
+                }
+
+                // Find next admin based on role precedence and join time
+                var nextAdmin = await _dbContext.GroupMembers
+                    .Where(m => m.GroupId == groupId && m.UserId != adminUserId)
+                    .OrderByDescending(m => m.Role) // First collaborators, then members
+                    .ThenBy(m => m.JoinedAt)        // Then by join time (earliest first)
+                    .FirstOrDefaultAsync();
+
+                if (nextAdmin == null)
+                {
+                    // If no other members, delete the group
+                    await DeleteGroupAsync(adminUserId, groupId);
+                    return new AdminLeaveResult
+                    {
+                        Success = true,
+                        Action = "delete",
+                        GroupId = groupId
+                    };
+                }
+
+                // Promote the next admin
+                nextAdmin.Role = GroupRole.Admin;
+
+                // Remove the current admin from the group
+                _dbContext.GroupMembers.Remove(adminMember);
+
+                await _dbContext.SaveChangesAsync();
+
+                return new AdminLeaveResult
+                {
+                    Success = true,
+                    Action = "leave",
+                    GroupId = groupId,
+                    NewAdminId = nextAdmin.UserId
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing admin leave");
+                throw;
+            }
+        }
+
+    }
+}
