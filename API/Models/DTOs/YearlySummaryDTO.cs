@@ -3,6 +3,7 @@
     public class YearlySummaryDTO
     {
         public int Year { get; set; }
+        public List<YearlyDetailDTO> YearlyDetails { get; set; }
         public decimal TotalIncome { get; set; }
         public decimal TotalExpenses { get; set; }
         public decimal NetCashFlow { get; set; }
