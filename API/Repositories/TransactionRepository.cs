@@ -57,16 +57,14 @@ namespace API.Repositories
                 var transaction = _mapper.Map<Transaction>(model);
                 transaction.TransactionID = Guid.NewGuid();
 
-                // Set the Type based on the provided value or calculate it from Amount
-                if (!string.IsNullOrEmpty(model.Type) &&
-                    (model.Type.ToLower() == "income" || model.Type.ToLower() == "expense"))
+                // Always set the type from the DTO, and ensure it's valid
+                if (string.IsNullOrEmpty(model.Type) ||
+                    (model.Type.ToLower() != "income" && model.Type.ToLower() != "expense"))
                 {
-                    transaction.Type = model.Type.ToLower();
+                    throw new ArgumentException("Transaction type must be 'income' or 'expense'.");
                 }
-                else
-                {
-                    transaction.Type = transaction.Amount < 0 ? "expense" : "income";
-                }
+                transaction.Type = model.Type.ToLower();
+
 
                 _context.Transactions.Add(transaction);
                 await _context.SaveChangesAsync();
@@ -113,16 +111,14 @@ namespace API.Repositories
 
                 _mapper.Map(model, transaction);
 
-                // Update the Type based on the provided value or calculate it from Amount
-                if (!string.IsNullOrEmpty(model.Type) &&
-                    (model.Type.ToLower() == "income" || model.Type.ToLower() == "expense"))
+                // Always set the type from the DTO, and ensure it's valid
+                if (string.IsNullOrEmpty(model.Type) ||
+                    (model.Type.ToLower() != "income" && model.Type.ToLower() != "expense"))
                 {
-                    transaction.Type = model.Type.ToLower();
+                    throw new ArgumentException("Transaction type must be 'income' or 'expense'.");
                 }
-                else
-                {
-                    transaction.Type = transaction.Amount < 0 ? "expense" : "income";
-                }
+                transaction.Type = model.Type.ToLower();
+
 
                 _context.Transactions.Update(transaction);
                 await _context.SaveChangesAsync();
@@ -295,12 +291,15 @@ namespace API.Repositories
                             t.TransactionDate <= endDate &&
                             userWalletIds.Contains(t.WalletID));
 
-                // Apply type filter (income/expense)
+                // Apply type filter (income/expense) using the Type property
                 if (!string.IsNullOrEmpty(type))
                 {
-                    bool isExpense = type.ToLower() == "expense";
-                    query = query.Where(t => isExpense ? t.Amount < 0 : t.Amount > 0);
+                    var loweredType = type.ToLower();
+                    if (loweredType != "income" && loweredType != "expense")
+                        throw new ArgumentException("Type must be 'income' or 'expense'.");
+                    query = query.Where(t => t.Type != null && t.Type.ToLower() == loweredType);
                 }
+
 
                 // Apply category filter
                 if (!string.IsNullOrEmpty(category))
@@ -459,12 +458,15 @@ namespace API.Repositories
                            t.TransactionDate <= endDate &&
                            userWalletIds.Contains(t.WalletID));
 
-                // Apply type filter (income/expense)
+                // Apply type filter (income/expense) using the Type property
                 if (!string.IsNullOrEmpty(type))
                 {
-                    bool isExpense = type.ToLower() == "expense";
-                    query = query.Where(t => isExpense ? t.Amount < 0 : t.Amount > 0);
+                    var loweredType = type.ToLower();
+                    if (loweredType != "income" && loweredType != "expense")
+                        throw new ArgumentException("Type must be 'income' or 'expense'.");
+                    query = query.Where(t => t.Type != null && t.Type.ToLower() == loweredType);
                 }
+
 
                 // Apply category filter
                 if (!string.IsNullOrEmpty(category))
@@ -619,7 +621,7 @@ namespace API.Repositories
         {
             try
             {
-                _logger.LogInformation("Generating weekly summary for week starting {Date}", weekStartDate);
+                _logger.LogInformation("Generating weekly summary for all weeks in month of {Date}", weekStartDate);
 
                 var userId = GetCurrentUserId();
 
@@ -629,32 +631,57 @@ namespace API.Repositories
                     .Select(w => w.WalletID)
                     .ToListAsync();
 
-                var startOfWeek = weekStartDate.Date;
-                var endOfWeek = startOfWeek.AddDays(7).AddTicks(-1);
+                // Get the first and last day of the month
+                var firstDayOfMonth = new DateTime(weekStartDate.Year, weekStartDate.Month, 1);
+                var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
 
-                var transactions = await _context.Transactions
+                // Find the first Monday on or before the first day of the month
+                var firstWeekStart = firstDayOfMonth.AddDays(-(int)(firstDayOfMonth.DayOfWeek == DayOfWeek.Sunday ? 6 : firstDayOfMonth.DayOfWeek - DayOfWeek.Monday));
+                // Find the last Sunday on or after the last day of the month
+                var lastWeekEnd = lastDayOfMonth.AddDays(DayOfWeek.Saturday - lastDayOfMonth.DayOfWeek + 1);
+
+                // Get all transactions for the month (including days in partial weeks at start/end)
+                var allMonthTransactions = await _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startOfWeek && t.TransactionDate <= endOfWeek && userWalletIds.Contains(t.WalletID))
+                    .Where(t => t.TransactionDate >= firstWeekStart && t.TransactionDate < lastWeekEnd && userWalletIds.Contains(t.WalletID))
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
-                var weeklyDetails = transactions
-                    .GroupBy(t => (startOfWeek.Day + 6 - (int)t.TransactionDate.DayOfWeek) / 7 + 1)
-                    .Select(g => new WeeklyDetailDTO
+                var weeklyDetails = new List<WeeklyDetailDTO>();
+                var weekNumber = 1;
+                for (var weekStart = firstWeekStart; weekStart < lastWeekEnd; weekStart = weekStart.AddDays(7), weekNumber++)
+                {
+                    var weekEnd = weekStart.AddDays(7);
+
+                    // Only include the part of the week that falls within the month
+                    var weekRangeStart = weekStart < firstDayOfMonth ? firstDayOfMonth : weekStart;
+                    var weekRangeEnd = weekEnd > lastDayOfMonth.AddDays(1) ? lastDayOfMonth.AddDays(1) : weekEnd;
+
+                    var weekTxs = allMonthTransactions
+                        .Where(t => t.TransactionDate >= weekRangeStart && t.TransactionDate < weekRangeEnd)
+                        .ToList();
+
+                    weeklyDetails.Add(new WeeklyDetailDTO
                     {
-                        WeekNumber = $"{g.Key}",
-                        Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
-                        Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
-                    }).ToList();
+                        WeekNumber = weekNumber.ToString(),
+                        Income = weekTxs.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                        Expense = Math.Abs(weekTxs.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                    });
+                }
+
+                // For the summary, use only the week containing weekStartDate
+                var summaryWeekStart = weekStartDate.Date;
+                var summaryWeekEnd = summaryWeekStart.AddDays(7);
+
+                var transactions = allMonthTransactions
+                    .Where(t => t.TransactionDate >= summaryWeekStart && t.TransactionDate < summaryWeekEnd)
+                    .ToList();
 
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
                 var netCashFlow = income - expenses;
 
-                var calendar = CultureInfo.CurrentCulture.Calendar;
-                //var weekNumber = calendar.GetWeekOfYear(startOfWeek, CalendarWeekRule.FirstDay, DayOfWeek.Monday);
-                var weekOfMonth = (startOfWeek.Day - 1) / 7 + 1;
                 var dailyTotals = transactions
                     .GroupBy(t => t.TransactionDate.DayOfWeek.ToString())
                     .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
@@ -669,12 +696,14 @@ namespace API.Repositories
                     .GroupBy(t => t.TransactionDate.DayOfWeek.ToString())
                     .ToDictionary(g => g.Key, g => Math.Abs(g.Sum(t => t.Amount)));
 
+                var weekOfMonth = ((weekStartDate.Day - 1) / 7) + 1;
+
                 var result = new WeeklySummaryDTO
                 {
-                    StartDate = startOfWeek,
-                    EndDate = endOfWeek,
+                    StartDate = summaryWeekStart,
+                    EndDate = summaryWeekEnd,
                     WeekNumber = weekOfMonth,
-                    Year = startOfWeek.Year,
+                    Year = weekStartDate.Year,
                     WeeklyDetails = weeklyDetails,
                     TotalIncome = income,
                     TotalExpenses = expenses,
@@ -695,6 +724,7 @@ namespace API.Repositories
         }
 
 
+
         public async Task<MonthlySummaryDTO> GetMonthlySummaryAsync(DateTime yearMonth)
         {
             try
@@ -709,24 +739,40 @@ namespace API.Repositories
                     .Select(w => w.WalletID)
                     .ToListAsync();
 
-                var startOfMonth = new DateTime(yearMonth.Year, yearMonth.Month, 1);
-                var endOfMonth = startOfMonth.AddMonths(1).AddTicks(-1);
+                // Get all transactions for the year
+                var startOfYear = new DateTime(yearMonth.Year, 1, 1);
+                var endOfYear = startOfYear.AddYears(1).AddTicks(-1);
 
-                var transactions = await _context.Transactions
+                var yearTransactions = await _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startOfMonth && t.TransactionDate <= endOfMonth && userWalletIds.Contains(t.WalletID))
+                    .Where(t => t.TransactionDate >= startOfYear && t.TransactionDate <= endOfYear && userWalletIds.Contains(t.WalletID))
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
-                var monthlyDetails = transactions
-                    .GroupBy(t => t.TransactionDate.ToString("MMMM"))
-                    .Select(g => new MonthlyDetailDTO
+                // Build MonthlyDetails for all 12 months
+                var monthlyDetails = Enumerable.Range(1, 12)
+                    .Select(month =>
                     {
-                        MonthName = g.Key,
-                        Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
-                        Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
-                    }).ToList();
+                        var monthTransactions = yearTransactions
+                            .Where(t => t.TransactionDate.Month == month);
+
+                        return new MonthlyDetailDTO
+                        {
+                            MonthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month),
+                            Income = monthTransactions.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                            Expense = Math.Abs(monthTransactions.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                        };
+                    })
+                    .ToList();
+
+                // Filter transactions for the requested month for summary
+                var startOfMonth = new DateTime(yearMonth.Year, yearMonth.Month, 1);
+                var endOfMonth = startOfMonth.AddMonths(1).AddTicks(-1);
+
+                var transactions = yearTransactions
+                    .Where(t => t.TransactionDate >= startOfMonth && t.TransactionDate <= endOfMonth)
+                    .ToList();
 
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
@@ -764,11 +810,12 @@ namespace API.Repositories
         }
 
 
+
         public async Task<YearlySummaryDTO> GetYearlySummaryAsync(int year)
         {
             try
             {
-                _logger.LogInformation("Generating yearly summary for year {Year}", year);
+                _logger.LogInformation("Generating yearly summary for recent years up to {Year}", year);
 
                 var userId = GetCurrentUserId();
 
@@ -778,24 +825,43 @@ namespace API.Repositories
                     .Select(w => w.WalletID)
                     .ToListAsync();
 
-                var startOfYear = new DateTime(year, 1, 1);
-                var endOfYear = new DateTime(year, 12, 31, 23, 59, 59, 999);
+                // Define the range of years (last 5 years including the requested year)
+                int yearsToShow = 5;
+                int startYear = year - yearsToShow + 1;
+                int endYear = year;
 
-                var transactions = await _context.Transactions
+                var startOfRange = new DateTime(startYear, 1, 1);
+                var endOfRange = new DateTime(endYear, 12, 31, 23, 59, 59, 999);
+
+                // Get all transactions for the range
+                var allTransactions = await _context.Transactions
                     .Include(t => t.Category)
                     .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startOfYear && t.TransactionDate <= endOfYear && userWalletIds.Contains(t.WalletID))
+                    .Where(t => t.TransactionDate >= startOfRange && t.TransactionDate <= endOfRange && userWalletIds.Contains(t.WalletID))
                     .OrderBy(t => t.TransactionDate)
                     .ToListAsync();
 
-                var yearlyDetails = transactions
-                    .GroupBy(t => t.TransactionDate.Year)
-                    .Select(g => new YearlyDetailDTO
+                // Build YearlyDetails for each year in the range
+                var yearlyDetails = Enumerable.Range(startYear, yearsToShow)
+                    .Select(yr =>
                     {
-                        Year = g.Key.ToString(),
-                        Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
-                        Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
-                    }).ToList();
+                        var yearTxs = allTransactions.Where(t => t.TransactionDate.Year == yr);
+                        return new YearlyDetailDTO
+                        {
+                            Year = yr.ToString(),
+                            Income = yearTxs.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                            Expense = Math.Abs(yearTxs.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                        };
+                    })
+                    .ToList();
+
+                // Filter transactions for the requested year for summary
+                var startOfYear = new DateTime(year, 1, 1);
+                var endOfYear = new DateTime(year, 12, 31, 23, 59, 59, 999);
+
+                var transactions = allTransactions
+                    .Where(t => t.TransactionDate >= startOfYear && t.TransactionDate <= endOfYear)
+                    .ToList();
 
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
@@ -838,6 +904,7 @@ namespace API.Repositories
                 throw;
             }
         }
+
 
         //TODO
         public async Task<ReportInfoDTO> GenerateReportAsync(

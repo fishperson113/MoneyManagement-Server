@@ -89,7 +89,7 @@ namespace API.Helpers
                 .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                 .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
-                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Amount < 0 ? "expense" : "income"))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
                 .ForMember(dest => dest.Category, opt => opt.Ignore())
                 .ForMember(dest => dest.Wallet, opt => opt.Ignore());
 
@@ -100,7 +100,7 @@ namespace API.Helpers
                 .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                 .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
                 .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
-                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Amount < 0 ? "expense" : "income"))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
                 .ForMember(dest => dest.Category, opt => opt.Ignore())
                 .ForMember(dest => dest.Wallet, opt => opt.Ignore());
 

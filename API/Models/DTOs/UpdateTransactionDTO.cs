@@ -17,6 +17,6 @@ namespace API.Models.DTOs
         [Required]
         public Guid WalletID { get; set; }
 
-        public string? Type { get; set; }
+        public required string Type { get; set; }
     }
 }
