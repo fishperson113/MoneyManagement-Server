@@ -568,14 +568,28 @@ namespace API.Repositories
                     .Where(t => t.TransactionDate >= startOfDay && t.TransactionDate <= endOfDay && userWalletIds.Contains(t.WalletID))
                     .ToListAsync();
 
-                var dailyDetails = transactions
-                    .GroupBy(t => t.TransactionDate.DayOfWeek)
-                    .Select(g => new DailyDetailDTO
+                // Group transactions by DayOfWeek for the current week
+                var weekStart = date.Date.AddDays(-(int)(date.DayOfWeek == DayOfWeek.Sunday ? 6 : date.DayOfWeek - DayOfWeek.Monday));
+                var weekEnd = weekStart.AddDays(7);
+
+                var weekTransactions = await _context.Transactions
+                    .Include(t => t.Category)
+                    .Include(t => t.Wallet)
+                    .Where(t => t.TransactionDate >= weekStart && t.TransactionDate < weekEnd && userWalletIds.Contains(t.WalletID))
+                    .ToListAsync();
+
+                var dailyDetails = Enum.GetValues<DayOfWeek>()
+                    .Select(dow =>
                     {
-                        DayOfWeek = g.Key.ToString(),
-                        Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
-                        Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
-                    }).ToList();
+                        var dayTxs = weekTransactions.Where(t => t.TransactionDate.DayOfWeek == dow);
+                        return new DailyDetailDTO
+                        {
+                            DayOfWeek = dow.ToString(),
+                            Income = dayTxs.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                            Expense = Math.Abs(dayTxs.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                        };
+                    })
+                    .ToList();
 
                 var income = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
                 var expenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
@@ -599,6 +613,7 @@ namespace API.Repositories
                 throw;
             }
         }
+
 
         public async Task<WeeklySummaryDTO> GetWeeklySummaryAsync(DateTime weekStartDate)
         {
