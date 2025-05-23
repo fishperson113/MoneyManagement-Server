@@ -366,8 +366,8 @@ namespace API.Repositories
                     .ToListAsync();
 
                 // Split transactions into income and expenses
-                var incomeTransactions = transactions.Where(t => t.Amount > 0).ToList();
-                var expenseTransactions = transactions.Where(t => t.Amount < 0).ToList();
+                var incomeTransactions = transactions.Where(t => t.Type == "income").ToList();
+                var expenseTransactions = transactions.Where(t => t.Type == "expense").ToList();
 
                 // Calculate totals for income and expenses
                 var totalIncome = incomeTransactions.Sum(t => t.Amount);
@@ -379,12 +379,12 @@ namespace API.Repositories
                     .Select(g => new CategoryBreakdownDTO
                     {
                         Category = g.Key,
-                        TotalIncome = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
-                        TotalExpense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount)),
-                        IncomePercentage = totalIncome == 0 ? 0 : Math.Round(g.Where(t => t.Amount > 0).Sum(t => t.Amount) / totalIncome * 100, 2),
-                        ExpensePercentage = totalExpense == 0 ? 0 : Math.Round(Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount)) / totalExpense * 100, 2)
+                        TotalIncome = g.Where(t => t.Type == "income").Sum(t => t.Amount),
+                        TotalExpense = Math.Abs(g.Where(t => t.Type == "expense").Sum(t => t.Amount)),
+                        IncomePercentage = totalIncome == 0 ? 0 : Math.Round(g.Where(t => t.Type == "income").Sum(t => t.Amount) / totalIncome * 100, 2),
+                        ExpensePercentage = totalExpense == 0 ? 0 : Math.Round(Math.Abs(g.Where(t => t.Type == "expense").Sum(t => t.Amount)) / totalExpense * 100, 2)
                     })
-                    .OrderByDescending(c => c.TotalIncome + c.TotalExpense) // Sort by total income + expense combined, you can adjust based on your sorting preference
+                    .OrderByDescending(c => c.TotalIncome + c.TotalExpense)
                     .ToList();
 
                 return result;
@@ -395,6 +395,7 @@ namespace API.Repositories
                 throw;
             }
         }
+
 
         public async Task<CashFlowSummaryDTO> GetCashFlowSummaryAsync(DateTime startDate, DateTime endDate)
         {
@@ -414,8 +415,8 @@ namespace API.Repositories
                     .Where(t => t.TransactionDate >= startDate && t.TransactionDate <= endDate && userWalletIds.Contains(t.WalletID))
                     .ToListAsync();
 
-                var totalIncome = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
-                var totalExpenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
+                var totalIncome = transactions.Where(t => t.Type == "income").Sum(t => t.Amount);
+                var totalExpenses = Math.Abs(transactions.Where(t => t.Type == "expense").Sum(t => t.Amount));
 
                 return new CashFlowSummaryDTO
                 {
@@ -430,6 +431,7 @@ namespace API.Repositories
                 throw;
             }
         }
+
 
 
         public async Task<IEnumerable<TransactionDetailDTO>> SearchTransactionsAsync(
