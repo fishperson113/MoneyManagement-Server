@@ -26,6 +26,8 @@ namespace API.Test
         private IWalletRepository walletRepository;
         private Mock<IHttpContextAccessor> httpContextAccessorMock;
         private string testUserId = "test-user-id";
+        private ApplicationUser testUser;
+        private ApplicationUser otherUser;
 
         [SetUp]
         public void Setup()
@@ -63,6 +65,26 @@ namespace API.Test
             httpContextAccessorMock.Setup(x => x.HttpContext).Returns(httpContext);
 
             walletRepository = new WalletRepository(context, mapper, logger, httpContextAccessorMock.Object);
+
+            // Create test users for reference in wallet objects
+            testUser = new ApplicationUser
+            {
+                Id = testUserId,
+                UserName = "testuser",
+                Email = "testuser@example.com"
+            };
+
+            otherUser = new ApplicationUser
+            {
+                Id = "other-user-id",
+                UserName = "otheruser",
+                Email = "otheruser@example.com"
+            };
+
+            // Add users to the context
+            context.Users.Add(testUser);
+            context.Users.Add(otherUser);
+            context.SaveChanges();
         }
 
         [TearDown]
@@ -80,15 +102,6 @@ namespace API.Test
                 WalletName = "Test Wallet",
                 Balance = 1000
             };
-            var user = new ApplicationUser
-            {
-                Id = testUserId,
-                UserName = "testuser",
-                Email = "testuser@example.com"
-            };
-
-            context.Users.Add(user);
-            await context.SaveChangesAsync();
 
             // Act
             var result = await walletRepository.CreateWalletAsync(createWalletDTO);
@@ -114,21 +127,16 @@ namespace API.Test
                 WalletName = "Updated Wallet",
                 Balance = 2000
             };
-            var user = new ApplicationUser
-            {
-                Id = testUserId,
-                UserName = "testuser",
-                Email = "testuser@example.com"
-            };
+
             var wallet = new Wallet
             {
                 WalletID = updateWalletDTO.WalletID,
                 WalletName = "Old Wallet",
                 Balance = 1000,
-                UserId = testUserId // Important: associate with test user
+                UserId = testUserId, // Important: associate with test user
+                User = testUser // Set the required User property
             };
 
-            context.Users.Add(user);
             context.Wallets.Add(wallet);
             await context.SaveChangesAsync();
 
@@ -156,27 +164,16 @@ namespace API.Test
                 WalletName = "Updated Wallet",
                 Balance = 2000
             };
-            var user = new ApplicationUser
-            {
-                Id = testUserId,
-                UserName = "testuser",
-                Email = "testuser@example.com"
-            };
-            var otherUser = new ApplicationUser
-            {
-                Id = "other-user-id",
-                UserName = "otheruser",
-                Email = "otheruser@example.com"
-            };
+
             var wallet = new Wallet
             {
                 WalletID = updateWalletDTO.WalletID,
                 WalletName = "Old Wallet",
                 Balance = 1000,
-                UserId = "other-user-id" // Wallet owned by another user
+                UserId = "other-user-id", // Wallet owned by another user
+                User = otherUser // Set the required User property
             };
 
-            context.Users.AddRange(user, otherUser);
             context.Wallets.Add(wallet);
             context.SaveChanges();
 
@@ -189,21 +186,16 @@ namespace API.Test
         {
             // Arrange
             var walletId = Guid.NewGuid();
-            var user = new ApplicationUser
-            {
-                Id = testUserId,
-                UserName = "testuser",
-                Email = "testuser@example.com"
-            };
+
             var wallet = new Wallet
             {
                 WalletID = walletId,
                 WalletName = "Test Wallet",
                 Balance = 1000,
-                UserId = testUserId // Important: associate with test user
+                UserId = testUserId, // Important: associate with test user
+                User = testUser // Set the required User property
             };
 
-            context.Users.Add(user);
             context.Wallets.Add(wallet);
             await context.SaveChangesAsync();
 
@@ -220,27 +212,16 @@ namespace API.Test
         {
             // Arrange
             var walletId = Guid.NewGuid();
-            var user = new ApplicationUser
-            {
-                Id = testUserId,
-                UserName = "testuser",
-                Email = "testuser@example.com"
-            };
-            var otherUser = new ApplicationUser
-            {
-                Id = "other-user-id",
-                UserName = "otheruser",
-                Email = "otheruser@example.com"
-            };
+
             var wallet = new Wallet
             {
                 WalletID = walletId,
                 WalletName = "Test Wallet",
                 Balance = 1000,
-                UserId = "other-user-id" // Wallet owned by another user
+                UserId = "other-user-id", // Wallet owned by another user
+                User = otherUser // Set the required User property
             };
 
-            context.Users.AddRange(user, otherUser);
             context.Wallets.Add(wallet);
             context.SaveChanges();
 
@@ -252,26 +233,31 @@ namespace API.Test
         public async Task GetAllWalletsAsync_ShouldReturnOnlyUserOwnedWallets()
         {
             // Arrange
-            var user1 = new ApplicationUser
-            {
-                Id = testUserId,
-                UserName = "testuser1",
-                Email = "testuser1@example.com"
-            };
-            var user2 = new ApplicationUser
-            {
-                Id = "other-user-id",
-                UserName = "testuser2",
-                Email = "testuser2@example.com"
-            };
             var wallets = new List<Wallet>
             {
-                new Wallet { WalletID = Guid.NewGuid(), WalletName = "User1 Wallet 1", Balance = 1000, UserId = testUserId },
-                new Wallet { WalletID = Guid.NewGuid(), WalletName = "User1 Wallet 2", Balance = 2000, UserId = testUserId },
-                new Wallet { WalletID = Guid.NewGuid(), WalletName = "User2 Wallet", Balance = 3000, UserId = "other-user-id" }
+                new Wallet {
+                    WalletID = Guid.NewGuid(),
+                    WalletName = "User1 Wallet 1",
+                    Balance = 1000,
+                    UserId = testUserId,
+                    User = testUser // Set the required User property
+                },
+                new Wallet {
+                    WalletID = Guid.NewGuid(),
+                    WalletName = "User1 Wallet 2",
+                    Balance = 2000,
+                    UserId = testUserId,
+                    User = testUser // Set the required User property
+                },
+                new Wallet {
+                    WalletID = Guid.NewGuid(),
+                    WalletName = "User2 Wallet",
+                    Balance = 3000,
+                    UserId = "other-user-id",
+                    User = otherUser // Set the required User property
+                }
             };
 
-            context.Users.AddRange(user1, user2);
             context.Wallets.AddRange(wallets);
             await context.SaveChangesAsync();
 
@@ -296,21 +282,16 @@ namespace API.Test
         {
             // Arrange
             var walletId = Guid.NewGuid();
-            var user = new ApplicationUser
-            {
-                Id = testUserId,
-                UserName = "testuser",
-                Email = "testuser@example.com"
-            };
+
             var wallet = new Wallet
             {
                 WalletID = walletId,
                 WalletName = "Test Wallet",
                 Balance = 1000,
-                UserId = testUserId // Important: associate with test user
+                UserId = testUserId, // Important: associate with test user
+                User = testUser // Set the required User property
             };
 
-            context.Users.Add(user);
             context.Wallets.Add(wallet);
             await context.SaveChangesAsync();
 
@@ -331,27 +312,16 @@ namespace API.Test
         {
             // Arrange
             var walletId = Guid.NewGuid();
-            var user = new ApplicationUser
-            {
-                Id = testUserId,
-                UserName = "testuser",
-                Email = "testuser@example.com"
-            };
-            var otherUser = new ApplicationUser
-            {
-                Id = "other-user-id",
-                UserName = "otheruser",
-                Email = "otheruser@example.com"
-            };
+
             var wallet = new Wallet
             {
                 WalletID = walletId,
                 WalletName = "Test Wallet",
                 Balance = 1000,
-                UserId = "other-user-id" // Wallet owned by another user
+                UserId = "other-user-id", // Wallet owned by another user
+                User = otherUser // Set the required User property
             };
 
-            context.Users.AddRange(user, otherUser);
             context.Wallets.Add(wallet);
             await context.SaveChangesAsync();
 

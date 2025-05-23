@@ -127,7 +127,8 @@ public class SeedService
                     WalletID = Guid.NewGuid(),
                     WalletName = walletName,
                     Balance = 0, // Start with zero, will update after creating transactions
-                    UserId = testUser.Id
+                    UserId = testUser.Id,
+                    User= testUser,
                 };
 
                 _dbContext.Wallets.Add(wallet);

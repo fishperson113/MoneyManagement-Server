@@ -62,6 +62,7 @@ namespace API.Data
                 .HasMany(u => u.Wallets)
                 .WithOne(w => w.User)
                 .HasForeignKey(w => w.UserId)
+                .IsRequired()
                 .OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<ApplicationUser>()
                .HasMany(u => u.Categories)
