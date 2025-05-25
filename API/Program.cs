@@ -34,7 +34,9 @@ builder.Services.AddSwaggerGen(option =>
 {
     option.SwaggerDoc("v1", new OpenApiInfo { Title = "MoneyManagement API", Version = "v1" });
 
+    option.EnableAnnotations();
     option.OperationFilter<SwaggerFileOperationFilter>();
+    option.SchemaFilter<SwaggerSchemaExampleFilter>();
 
     option.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {

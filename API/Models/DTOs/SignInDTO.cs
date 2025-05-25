@@ -1,18 +1,18 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.OpenApi.Any;
 using Swashbuckle.AspNetCore.Annotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace API.Models.DTOs
 {
     public class SignInDTO
     {
         [Required, EmailAddress]
-        [SwaggerSchema("User's email address")]
-        [SwaggerParameter("mon@example.com")]
+        [SwaggerSchema(Description = "User's email address", Format = "email")]
+
         public string Email { get; set; } = null!;
 
         [Required]
-        [SwaggerSchema("User's password")]
-        [SwaggerParameter("Mon@123")]
+        [SwaggerSchema(Description = "User's password")]
         public string Password { get; set; } = null!;
     }
 }
