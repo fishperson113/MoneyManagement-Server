@@ -246,9 +246,22 @@ namespace API.Helpers
                 .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
                 .ForMember(dest => dest.SentAt, opt => opt.Ignore())      // Set to current time
                 .ForMember(dest => dest.Group, opt => opt.Ignore());      // Loaded separately
-       
-        // Simple self-mappings for DTOs that are created directly in the repository
-        CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
+
+            // GroupFund mappings
+            CreateMap<CreateGroupFundDTO, GroupFund>()
+                .ForMember(dest => dest.GroupFundID, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupID, opt => opt.MapFrom(src => src.GroupID))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.TotalFundsIn, opt => opt.MapFrom(_ => 0))
+                .ForMember(dest => dest.TotalFundsOut, opt => opt.MapFrom(_ => 0))
+                .ForMember(dest => dest.Balance, opt => opt.MapFrom(_ => 0))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
+                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
+                .ForMember(dest => dest.Transactions, opt => opt.Ignore());
+            
+
+            // Simple self-mappings for DTOs that are created directly in the repository
+            CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
             CreateMap<CashFlowSummaryDTO, CashFlowSummaryDTO>();
             CreateMap<DailySummaryDTO, DailySummaryDTO>();
             CreateMap<AggregateStatisticsDTO, AggregateStatisticsDTO>();

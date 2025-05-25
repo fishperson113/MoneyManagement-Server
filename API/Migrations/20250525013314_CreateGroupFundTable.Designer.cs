@@ -4,6 +4,7 @@ using API.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250525013314_CreateGroupFundTable")]
+    partial class CreateGroupFundTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -165,9 +168,6 @@ namespace API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<Guid>("GroupID")
                         .HasColumnType("uniqueidentifier");
 
@@ -181,8 +181,6 @@ namespace API.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("GroupFundID");
-
-                    b.HasIndex("GroupID");
 
                     b.ToTable("GroupFunds");
                 });
@@ -569,17 +567,6 @@ namespace API.Migrations
                     b.Navigation("Creator");
                 });
 
-            modelBuilder.Entity("API.Models.Entities.GroupFund", b =>
-                {
-                    b.HasOne("API.Models.Entities.Group", "Group")
-                        .WithMany("Funds")
-                        .HasForeignKey("GroupID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Group");
-                });
-
             modelBuilder.Entity("API.Models.Entities.GroupMember", b =>
                 {
                     b.HasOne("API.Models.Entities.Group", "Group")
@@ -782,8 +769,6 @@ namespace API.Migrations
 
             modelBuilder.Entity("API.Models.Entities.Group", b =>
                 {
-                    b.Navigation("Funds");
-
                     b.Navigation("Members");
 
                     b.Navigation("Messages");

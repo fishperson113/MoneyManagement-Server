@@ -96,6 +96,7 @@ builder.Services.AddScoped<GeminiService>();
 builder.Services.AddScoped<MessageRepository>();
 builder.Services.AddScoped<FriendRepository>();
 builder.Services.AddScoped<GroupRepository>();
+builder.Services.AddScoped<IGroupFundRepository, GroupFundRepository>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 builder.Services.AddSignalR();
 

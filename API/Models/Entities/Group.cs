@@ -15,5 +15,7 @@ namespace API.Models.Entities
 
         public ICollection<GroupMember> Members { get; set; } = new List<GroupMember>();
         public ICollection<GroupMessage> Messages { get; set; } = new List<GroupMessage>();
+        public ICollection<GroupFund> Funds { get; set; } = new List<GroupFund>();
+
     }
 }

@@ -19,7 +19,7 @@ namespace API.Data
         public DbSet<Group> Groups { get; set; } = null!;
         public DbSet<GroupMember> GroupMembers { get; set; } = null!;
         public DbSet<GroupMessage> GroupMessages { get; set; } = null!;
-
+        public DbSet<GroupFund> GroupFunds { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -156,6 +156,13 @@ namespace API.Data
                 .HasOne(gm => gm.Sender)
                 .WithMany(u => u.GroupMessagesSent)
                 .HasForeignKey(gm => gm.SenderId);
+
+            // GroupFund relationships
+            modelBuilder.Entity<GroupFund>()
+                .HasOne(gf => gf.Group)
+                .WithMany(g => g.Funds)
+                .HasForeignKey(gf => gf.GroupID)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }
