@@ -4,6 +4,7 @@ using API.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250525013314_CreateGroupFundTable")]
+    partial class CreateGroupFundTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -165,9 +168,6 @@ namespace API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<Guid>("GroupID")
                         .HasColumnType("uniqueidentifier");
 
@@ -181,8 +181,6 @@ namespace API.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("GroupFundID");
-
-                    b.HasIndex("GroupID");
 
                     b.ToTable("GroupFunds");
                 });
@@ -275,96 +273,6 @@ namespace API.Migrations
                     b.HasIndex("SenderId");
 
                     b.ToTable("Messages");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.Post", b =>
-                {
-                    b.Property<Guid>("PostId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AuthorId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("MediaType")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MediaUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("PostId");
-
-                    b.HasIndex("AuthorId")
-                        .HasDatabaseName("IX_Post_AuthorId");
-
-                    b.HasIndex("CreatedAt")
-                        .HasDatabaseName("IX_Post_CreatedAt");
-
-                    b.ToTable("Posts");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.PostComment", b =>
-                {
-                    b.Property<Guid>("CommentId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("AuthorId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("PostId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("CommentId");
-
-                    b.HasIndex("AuthorId");
-
-                    b.HasIndex("PostId");
-
-                    b.ToTable("PostComments");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.PostLike", b =>
-                {
-                    b.Property<Guid>("LikeId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("PostId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("LikeId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("PostId", "UserId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_PostLike_PostId_UserId");
-
-                    b.ToTable("PostLikes");
                 });
 
             modelBuilder.Entity("API.Models.Entities.RefreshToken", b =>
@@ -659,17 +567,6 @@ namespace API.Migrations
                     b.Navigation("Creator");
                 });
 
-            modelBuilder.Entity("API.Models.Entities.GroupFund", b =>
-                {
-                    b.HasOne("API.Models.Entities.Group", "Group")
-                        .WithMany("Funds")
-                        .HasForeignKey("GroupID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Group");
-                });
-
             modelBuilder.Entity("API.Models.Entities.GroupMember", b =>
                 {
                     b.HasOne("API.Models.Entities.Group", "Group")
@@ -725,55 +622,6 @@ namespace API.Migrations
                     b.Navigation("Receiver");
 
                     b.Navigation("Sender");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.Post", b =>
-                {
-                    b.HasOne("API.Models.Entities.ApplicationUser", "Author")
-                        .WithMany()
-                        .HasForeignKey("AuthorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Author");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.PostComment", b =>
-                {
-                    b.HasOne("API.Models.Entities.ApplicationUser", "Author")
-                        .WithMany()
-                        .HasForeignKey("AuthorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("API.Models.Entities.Post", "Post")
-                        .WithMany("Comments")
-                        .HasForeignKey("PostId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Author");
-
-                    b.Navigation("Post");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.PostLike", b =>
-                {
-                    b.HasOne("API.Models.Entities.Post", "Post")
-                        .WithMany("Likes")
-                        .HasForeignKey("PostId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("API.Models.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Post");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("API.Models.Entities.RefreshToken", b =>
@@ -921,8 +769,6 @@ namespace API.Migrations
 
             modelBuilder.Entity("API.Models.Entities.Group", b =>
                 {
-                    b.Navigation("Funds");
-
                     b.Navigation("Members");
 
                     b.Navigation("Messages");
@@ -931,13 +777,6 @@ namespace API.Migrations
             modelBuilder.Entity("API.Models.Entities.GroupFund", b =>
                 {
                     b.Navigation("Transactions");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.Post", b =>
-                {
-                    b.Navigation("Comments");
-
-                    b.Navigation("Likes");
                 });
 
             modelBuilder.Entity("API.Models.Entities.Wallet", b =>
