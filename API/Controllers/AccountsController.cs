@@ -152,6 +152,93 @@ namespace API.Controllers
             // ...
             return Ok(new { FileName = file.FileName, Length = file.Length });
         }
+
+        /// <summary>
+        /// Uploads a file to Firebase Storage with appropriate folder organization based on media type
+        /// </summary>
+        /// <param name="file">The file to upload</param>
+        /// <param name="firebaseHelper">Firebase helper service</param>
+        /// <param name="category">Optional category to organize files (default: "general")</param>
+        /// <returns>The URL of the uploaded file</returns>
+        [HttpPost("upload-media")]
+        [Authorize]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadMedia(
+            IFormFile file,
+            [FromServices] FirebaseHelper firebaseHelper,
+            [FromQuery] string category = "general")
+        {
+            if (file is null || file.Length == 0)
+            {
+                return BadRequest("No file uploaded");
+            }
+
+            // Get current user ID from claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized();
+            }
+
+            try
+            {
+                // Determine folder based on media type
+                string folder;
+                string mediaType;
+                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+                // Images
+                if (extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+                {
+                    mediaType = "image";
+                    folder = $"{category}/images/{userId}";
+                }
+                // Videos
+                else if (extension is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm")
+                {
+                    mediaType = "video";
+                    folder = $"{category}/videos/{userId}";
+                }
+                // Audio
+                else if (extension is ".mp3" or ".wav" or ".ogg" or ".m4a" or ".flac")
+                {
+                    mediaType = "audio";
+                    folder = $"{category}/audio/{userId}";
+                }
+                // Documents
+                else if (extension is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt")
+                {
+                    mediaType = "document";
+                    folder = $"{category}/documents/{userId}";
+                }
+                // Other files
+                else
+                {
+                    mediaType = "other";
+                    folder = $"{category}/other/{userId}";
+                }
+
+                // Upload file
+                var fileUrl = await firebaseHelper.UploadFileAsync(folder, file);
+
+                return Ok(new
+                {
+                    Url = fileUrl,
+                    MediaType = mediaType,
+                    FileName = file.FileName,
+                    ContentType = file.ContentType,
+                    Size = file.Length
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error uploading file: {ex.Message}");
+            }
+        }
         [Authorize]
         [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()

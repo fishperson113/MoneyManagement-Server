@@ -205,5 +205,23 @@ namespace API.Repositories
                 throw;
             }
         }
+        public async Task<bool> IsFriendAsync(string userId, string otherUserId)
+        {
+            try
+            {
+                var friendship = await _dbContext.UserFriends
+                    .FirstOrDefaultAsync(uf =>
+                        (uf.UserId == userId && uf.FriendId == otherUserId ||
+                        uf.UserId == otherUserId && uf.FriendId == userId) &&
+                        uf.IsAccepted);
+
+                return friendship != null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error checking if users {UserId} and {OtherUserId} are friends", userId, otherUserId);
+                throw;
+            }
+        }
     }
 }

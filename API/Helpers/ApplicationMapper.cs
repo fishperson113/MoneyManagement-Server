@@ -248,7 +248,7 @@ namespace API.Helpers
                 .ForMember(dest => dest.Group, opt => opt.Ignore());      // Loaded separately
        
         // Simple self-mappings for DTOs that are created directly in the repository
-        CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
+            CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
             CreateMap<CashFlowSummaryDTO, CashFlowSummaryDTO>();
             CreateMap<DailySummaryDTO, DailySummaryDTO>();
             CreateMap<AggregateStatisticsDTO, AggregateStatisticsDTO>();
@@ -268,6 +268,23 @@ namespace API.Helpers
             CreateMap<FriendDTO, FriendDTO>();
             CreateMap<FriendRequestDTO, FriendRequestDTO>();
             CreateMap<AvatarDTO, AvatarDTO>();
+
+            // Add these mappings to your existing CreateMappings method
+            CreateMap<Post, PostDTO>()
+                .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src =>
+                    $"{src.Author.FirstName} {src.Author.LastName}".Trim()))
+                .ForMember(dest => dest.AuthorAvatarUrl, opt => opt.MapFrom(src => src.Author.AvatarUrl))
+                .ForMember(dest => dest.LikesCount, opt => opt.MapFrom(src => src.Likes.Count))
+                .ForMember(dest => dest.CommentsCount, opt => opt.MapFrom(src => src.Comments.Count));
+
+            CreateMap<PostComment, PostCommentDTO>()
+                .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src =>
+                    $"{src.Author.FirstName} {src.Author.LastName}".Trim()))
+                .ForMember(dest => dest.AuthorAvatarUrl, opt => opt.MapFrom(src => src.Author.AvatarUrl));
+
+            CreateMap<PostLike, PostLikeDTO>()
+                .ForMember(dest => dest.UserName, opt => opt.MapFrom(src =>
+                    $"{src.User.FirstName} {src.User.LastName}".Trim()));
 
         }
 

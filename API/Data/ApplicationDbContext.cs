@@ -19,7 +19,9 @@ namespace API.Data
         public DbSet<Group> Groups { get; set; } = null!;
         public DbSet<GroupMember> GroupMembers { get; set; } = null!;
         public DbSet<GroupMessage> GroupMessages { get; set; } = null!;
-
+        public DbSet<Post> Posts { get; set; } = null!;
+        public DbSet<PostLike> PostLikes { get; set; } = null!;
+        public DbSet<PostComment> PostComments { get; set; } = null!;
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -156,6 +158,53 @@ namespace API.Data
                 .HasOne(gm => gm.Sender)
                 .WithMany(u => u.GroupMessagesSent)
                 .HasForeignKey(gm => gm.SenderId);
+
+            // Post relationships
+            modelBuilder.Entity<Post>()
+                .HasOne(p => p.Author)
+                .WithMany()
+                .HasForeignKey(p => p.AuthorId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Post indexes for faster querying
+            modelBuilder.Entity<Post>()
+                .HasIndex(p => p.AuthorId)
+                .HasDatabaseName("IX_Post_AuthorId");
+
+            modelBuilder.Entity<Post>()
+                .HasIndex(p => p.CreatedAt)
+                .HasDatabaseName("IX_Post_CreatedAt");
+
+            // PostLike relationships
+            modelBuilder.Entity<PostLike>()
+                .HasOne(pl => pl.Post)
+                .WithMany(p => p.Likes)
+                .HasForeignKey(pl => pl.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PostLike>()
+                .HasOne(pl => pl.User)
+                .WithMany()
+                .HasForeignKey(pl => pl.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PostLike>()
+                .HasIndex(pl => new { pl.PostId, pl.UserId })
+                .IsUnique()
+                .HasDatabaseName("IX_PostLike_PostId_UserId");
+
+            // PostComment relationships
+            modelBuilder.Entity<PostComment>()
+                .HasOne(pc => pc.Post)
+                .WithMany(p => p.Comments)
+                .HasForeignKey(pc => pc.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PostComment>()
+                .HasOne(pc => pc.Author)
+                .WithMany()
+                .HasForeignKey(pc => pc.AuthorId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

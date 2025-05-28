@@ -1,19 +1,20 @@
-﻿using API.Data;
+﻿using API.Config;
+using API.Data;
+using API.Helpers;
+using API.Hub;
+using API.Models.Entities;
+using API.Repositories;
+using API.Services; 
+using Google.Api;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using API.Repositories;
-using System.Text;
-using Microsoft.OpenApi.Models;
-using API.Models.Entities;
-using API.Services; 
-using System.Security.Cryptography.X509Certificates;
-using API.Helpers;
 using Microsoft.Extensions.DependencyInjection;
-using API.Config;
-using API.Hub;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -98,6 +99,7 @@ builder.Services.AddScoped<GeminiService>();
 builder.Services.AddScoped<MessageRepository>();
 builder.Services.AddScoped<FriendRepository>();
 builder.Services.AddScoped<GroupRepository>();
+builder.Services.AddScoped<PostRepository>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 builder.Services.AddSignalR();
 
