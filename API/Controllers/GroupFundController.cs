@@ -22,10 +22,12 @@ namespace API.Controllers
         }
 
         [HttpGet("{groupId}")]
-        public async Task<ActionResult<IEnumerable<GroupFundDTO>>> GetGroupFundsByGroupId(GetGroupFundByGroupIdDTO dto)
+        public async Task<ActionResult<IEnumerable<GroupFundDTO>>> GetGroupFundsByGroupId(Guid groupId)
         {
             try
             {
+                var dto = new GetGroupFundByGroupIdDTO { GroupID = groupId };
+
                 var groupFund = await _repository.GetGroupFundsByGroupIdAsync(dto);
 
                 if (groupFund == null)
@@ -37,7 +39,7 @@ namespace API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while retrieving group fund with ID {Group ID}", dto.GroupID);
+                _logger.LogError(ex, "Error occurred while retrieving group funds for Group ID {GroupID}", groupId);
                 return StatusCode(500, "An error occurred while retrieving the transaction");
             }
         }

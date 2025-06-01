@@ -258,7 +258,16 @@ namespace API.Helpers
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
-            
+
+            CreateMap<GroupFund, GroupFundDTO>()
+                .ForMember(dest => dest.GroupFundID, opt => opt.MapFrom(src => src.GroupFundID))
+                .ForMember(dest => dest.GroupID, opt => opt.MapFrom(src => src.GroupID))
+                .ForMember(dest => dest.TotalFundsIn, opt => opt.MapFrom(src => src.TotalFundsIn))
+                .ForMember(dest => dest.TotalFundsOut, opt => opt.MapFrom(src => src.TotalFundsOut))
+                .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
+                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.UpdatedAt))
+                .ForMember(dest => dest.Transactions, opt => opt.MapFrom(src => src.Transactions));
 
             // Simple self-mappings for DTOs that are created directly in the repository
             CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();
