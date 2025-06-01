@@ -247,7 +247,7 @@ namespace API.Helpers
                 .ForMember(dest => dest.SentAt, opt => opt.Ignore())      // Set to current time
                 .ForMember(dest => dest.Group, opt => opt.Ignore());      // Loaded separately
 
-            // GroupFund mappings
+            // Group Fund mappings
             CreateMap<CreateGroupFundDTO, GroupFund>()
                 .ForMember(dest => dest.GroupFundID, opt => opt.Ignore())
                 .ForMember(dest => dest.GroupID, opt => opt.MapFrom(src => src.GroupID))
@@ -257,7 +257,7 @@ namespace API.Helpers
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(_ => 0))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
-                .ForMember(dest => dest.Transactions, opt => opt.Ignore());
+                .ForMember(dest => dest.GroupTransactions, opt => opt.Ignore());
 
             CreateMap<GroupFund, GroupFundDTO>()
                 .ForMember(dest => dest.GroupFundID, opt => opt.MapFrom(src => src.GroupFundID))
@@ -267,7 +267,56 @@ namespace API.Helpers
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.UpdatedAt))
-                .ForMember(dest => dest.Transactions, opt => opt.MapFrom(src => src.Transactions));
+                .ForMember(dest => dest.GroupTransactions, opt => opt.MapFrom(src => src.GroupTransactions));
+
+            CreateMap<UpdateGroupFundDTO, GroupFund>()
+                .ForMember(dest => dest.GroupFundID, opt => opt.MapFrom(src => src.GroupFundID))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.SavingGoal, opt => opt.MapFrom(src => src.SavingGoal))
+                .ForMember(dest => dest.GroupID, opt => opt.Ignore())
+                .ForMember(dest => dest.TotalFundsIn, opt => opt.Ignore())
+                .ForMember(dest => dest.TotalFundsOut, opt => opt.Ignore())
+                .ForMember(dest => dest.Balance, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupTransactions, opt => opt.Ignore());
+
+            // Group Transaction mappings
+            CreateMap<CreateGroupTransactionDTO, GroupTransaction>()
+                .ForMember(dest => dest.GroupTransactionID, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupFundID, opt => opt.MapFrom(src => src.GroupFundID))
+                .ForMember(dest => dest.UserWalletID, opt => opt.MapFrom(src => src.UserWalletID))
+                .ForMember(dest => dest.UserCategoryID, opt => opt.MapFrom(src => src.UserCategoryID))
+                .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
+                .ForMember(dest => dest.GroupFund, opt => opt.Ignore())
+                .ForMember(dest => dest.UserWallet, opt => opt.Ignore())
+                .ForMember(dest => dest.UserCategory, opt => opt.Ignore());
+
+            CreateMap<GroupTransaction, GroupTransactionDTO>()
+                .ForMember(dest => dest.GroupTransactionID, opt => opt.MapFrom(src => src.GroupTransactionID))
+                .ForMember(dest => dest.GroupFundID, opt => opt.MapFrom(src => src.GroupFundID))
+                .ForMember(dest => dest.UserWalletID, opt => opt.MapFrom(src => src.UserWalletID))
+                .ForMember(dest => dest.UserCategoryID, opt => opt.MapFrom(src => src.UserCategoryID))
+                .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type));
+
+            CreateMap<UpdateGroupTransactionDTO, GroupTransaction>()
+                .ForMember(dest => dest.GroupTransactionID, opt => opt.MapFrom(src => src.GroupTransactionID))
+                .ForMember(dest => dest.UserWalletID, opt => opt.MapFrom(src => src.UserWalletID))
+                .ForMember(dest => dest.UserCategoryID, opt => opt.MapFrom(src => src.UserCategoryID))
+                .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
+                .ForMember(dest => dest.GroupFundID, opt => opt.Ignore()) 
+                .ForMember(dest => dest.GroupFund, opt => opt.Ignore())
+                .ForMember(dest => dest.UserWallet, opt => opt.Ignore())
+                .ForMember(dest => dest.UserCategory, opt => opt.Ignore());
 
             // Simple self-mappings for DTOs that are created directly in the repository
             CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();

@@ -11,7 +11,7 @@
 
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
-        public ICollection<TransactionDTO>? Transactions { get; set; }
+        public ICollection<GroupTransactionDTO>? GroupTransactions { get; set; }
     }
 
     public class CreateGroupFundDTO
@@ -22,14 +22,13 @@
 
     public class UpdateGroupFundDTO
     {
-        public Guid GroupID { get; set; }
         public Guid GroupFundID { get; set; }
         public string? Description { get; set; }
+        public decimal SavingGoal { get; set; }
     }
 
     public class DeleteGroupFundByIdDTO
     {
-        public Guid GroupID { get; set; }
         public Guid GroupFundID { get; set; }
     }
 

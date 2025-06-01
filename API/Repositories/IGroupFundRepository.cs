@@ -7,8 +7,8 @@ namespace API.Repositories
     {
         Task<GroupFundDTO> CreateGroupFundAsync(CreateGroupFundDTO dto);
         Task<IEnumerable<GroupFundDTO>> GetGroupFundsByGroupIdAsync(GetGroupFundByGroupIdDTO model);
-        //Task<GroupFundDTO> UpdateGroupFundAsync(UpdateGroupFundDTO model);
-        //Task<Guid> DeleteGroupFundAsync(DeleteGroupFundByIdDTO model);
+        Task<GroupFundDTO> UpdateGroupFundAsync(UpdateGroupFundDTO dto);
+        Task<Guid> DeleteGroupFundAsync(Guid groupFundId);
 
     }
 }

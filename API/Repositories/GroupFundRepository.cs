@@ -83,30 +83,70 @@ namespace API.Repositories
             }
         }
 
-        //public async Task<GroupFundDTO> UpdateGroupFundAsync(UpdateGroupFundDTO model)
-        //{
-        //    try
-        //    {
-        //        _logger.LogInformation("Updating group fund with ID: {GroupFundID}", model.GroupFundID);
+        public async Task<GroupFundDTO> UpdateGroupFundAsync(UpdateGroupFundDTO dto)
+        {
+            try
+            {
+                _logger.LogInformation("Updating group fund with ID: {GroupFundID}", dto.GroupFundID);
 
-        //        var userId = GetCurrentUserId();
-        //        var fund = await _context.GroupFunds
-        //            .FirstOrDefaultAsync(f => f.GroupFundID == model.GroupFundID && f.UserID == userId);
+                var userId = GetCurrentUserId();
 
-        //        if (fund == null)
-        //            throw new Exception("Group fund not found or you do not have permission to update it");
+                var groupFund = await _context.GroupFunds
+                    .Include(gf => gf.Group)
+                        .ThenInclude(g => g.Members)
+                    .FirstOrDefaultAsync(gf => gf.GroupFundID == dto.GroupFundID);
 
-        //        _mapper.Map(model, fund);
-        //        _context.GroupFunds.Update(fund);
-        //        await _context.SaveChangesAsync();
+                if (groupFund == null)
+                    throw new Exception("Group fund not found");
 
-        //        return _mapper.Map<GroupFundDTO>(fund);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error occurred while updating group fund: {GroupFundID}", model.GroupFundID);
-        //        throw;
-        //    }
-        //}
+                if (!groupFund.Group.Members.Any(m => m.UserId == userId))
+                    throw new UnauthorizedAccessException("You are not a member of this group");
+
+                groupFund.Description = dto.Description;
+                groupFund.SavingGoal = dto.SavingGoal;
+                groupFund.UpdatedAt = DateTime.UtcNow;
+
+                _context.GroupFunds.Update(groupFund);
+                await _context.SaveChangesAsync();
+
+                return _mapper.Map<GroupFundDTO>(groupFund);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while updating group fund: {GroupFundID}", dto.GroupFundID);
+                throw;
+            }
+        }
+
+        public async Task<Guid> DeleteGroupFundAsync(Guid groupFundId)
+        {
+            try
+            {
+                _logger.LogInformation("Deleting group fund with ID: {GroupFundID}", groupFundId);
+
+                var userId = GetCurrentUserId();
+
+                var groupFund = await _context.GroupFunds
+                    .Include(gf => gf.Group)
+                        .ThenInclude(g => g.Members)
+                    .FirstOrDefaultAsync(gf => gf.GroupFundID == groupFundId);
+
+                if (groupFund == null)
+                    throw new Exception("Group fund not found");
+
+                if (!groupFund.Group.Members.Any(m => m.UserId == userId))
+                    throw new UnauthorizedAccessException("You are not a member of this group");
+
+                _context.GroupFunds.Remove(groupFund);
+                await _context.SaveChangesAsync();
+
+                return groupFundId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while deleting group fund: {GroupFundID}", groupFundId);
+                throw;
+            }
+        }
     }
 }

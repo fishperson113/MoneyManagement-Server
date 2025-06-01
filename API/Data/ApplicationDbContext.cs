@@ -20,6 +20,7 @@ namespace API.Data
         public DbSet<GroupMember> GroupMembers { get; set; } = null!;
         public DbSet<GroupMessage> GroupMessages { get; set; } = null!;
         public DbSet<GroupFund> GroupFunds { get; set; }
+        public DbSet<GroupTransaction> GroupTransactions { get; set; }
         public DbSet<Post> Posts { get; set; } = null!;
         public DbSet<PostLike> PostLikes { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
@@ -167,6 +168,25 @@ namespace API.Data
                 .HasForeignKey(gf => gf.GroupID)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Group Transaction relationships
+            modelBuilder.Entity<GroupTransaction>()
+                .HasOne(gt => gt.GroupFund)
+                .WithMany(gf => gf.GroupTransactions)
+                .HasForeignKey(gt => gt.GroupFundID)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GroupTransaction>()
+                .HasOne(gt => gt.UserWallet)
+                .WithMany(w => w.GroupTransactions)
+                .HasForeignKey(gt => gt.UserWalletID)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GroupTransaction>()
+                .HasOne(gt => gt.UserCategory)
+                .WithMany(c => c.GroupTransactions)
+                .HasForeignKey(gt => gt.UserCategoryID)
+                .OnDelete(DeleteBehavior.Restrict);
+            
             // Post relationships
             modelBuilder.Entity<Post>()
                 .HasOne(p => p.Author)

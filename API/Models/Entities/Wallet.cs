@@ -8,5 +8,7 @@
         public required string UserId { get; set; }  
         public required ApplicationUser? User { get; set; } 
         public ICollection<Transaction>? Transactions { get; set; }
+        public ICollection<GroupTransaction> GroupTransactions { get; set; } = new List<GroupTransaction>();
+
     }
 }

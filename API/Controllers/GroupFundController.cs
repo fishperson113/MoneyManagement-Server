@@ -61,5 +61,46 @@ namespace API.Controllers
                 return StatusCode(500, "An error occurred while creating the group fund");
             }
         }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateGroupFund(Guid id, [FromBody] UpdateGroupFundDTO dto)
+        {
+            if (id != dto.GroupFundID)
+                return BadRequest("ID mismatch");
+
+            try
+            {
+                var updated = await _repository.UpdateGroupFundAsync(dto);
+                return Ok(updated);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while updating group fund");
+                return StatusCode(500, "Error occurred while updating the group fund");
+            }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteGroupFund(Guid id)
+        {
+            try
+            {
+                var deletedId = await _repository.DeleteGroupFundAsync(id);
+                return Ok(new { DeletedId = deletedId });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while deleting group fund");
+                return StatusCode(500, "Error occurred while deleting the group fund");
+            }
+        }
     }
 }

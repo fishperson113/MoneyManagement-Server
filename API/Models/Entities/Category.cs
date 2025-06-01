@@ -7,6 +7,8 @@
         public required DateTime CreatedAt { get; set; }
         public string? UserId { get; set; }
         public ApplicationUser? User { get; set; }
-        public ICollection<Transaction>? Transactions { get; set; } 
+        public ICollection<Transaction>? Transactions { get; set; }
+        public ICollection<GroupTransaction> GroupTransactions { get; set; } = new List<GroupTransaction>();
+
     }
 }
