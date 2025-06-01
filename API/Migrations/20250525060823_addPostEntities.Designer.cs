@@ -4,6 +4,7 @@ using API.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace API.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250525060823_addPostEntities")]
+    partial class addPostEntities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -151,40 +154,6 @@ namespace API.Migrations
                     b.HasIndex("CreatorId");
 
                     b.ToTable("Groups");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.GroupFund", b =>
-                {
-                    b.Property<Guid>("GroupFundID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("Balance")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("GroupID")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal>("TotalFundsIn")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("TotalFundsOut")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("GroupFundID");
-
-                    b.HasIndex("GroupID");
-
-                    b.ToTable("GroupFunds");
                 });
 
             modelBuilder.Entity("API.Models.Entities.GroupMember", b =>
@@ -418,9 +387,6 @@ namespace API.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid?>("GroupFundID")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<DateTime>("TransactionDate")
                         .HasColumnType("datetime2");
 
@@ -438,8 +404,6 @@ namespace API.Migrations
 
                     b.HasIndex("CategoryID")
                         .HasDatabaseName("IX_Transaction_CategoryID");
-
-                    b.HasIndex("GroupFundID");
 
                     b.HasIndex("TransactionDate")
                         .HasDatabaseName("IX_Transaction_TransactionDate");
@@ -659,17 +623,6 @@ namespace API.Migrations
                     b.Navigation("Creator");
                 });
 
-            modelBuilder.Entity("API.Models.Entities.GroupFund", b =>
-                {
-                    b.HasOne("API.Models.Entities.Group", "Group")
-                        .WithMany("Funds")
-                        .HasForeignKey("GroupID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Group");
-                });
-
             modelBuilder.Entity("API.Models.Entities.GroupMember", b =>
                 {
                     b.HasOne("API.Models.Entities.Group", "Group")
@@ -795,10 +748,6 @@ namespace API.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("API.Models.Entities.GroupFund", null)
-                        .WithMany("Transactions")
-                        .HasForeignKey("GroupFundID");
-
                     b.HasOne("API.Models.Entities.Wallet", "Wallet")
                         .WithMany("Transactions")
                         .HasForeignKey("WalletID")
@@ -921,16 +870,9 @@ namespace API.Migrations
 
             modelBuilder.Entity("API.Models.Entities.Group", b =>
                 {
-                    b.Navigation("Funds");
-
                     b.Navigation("Members");
 
                     b.Navigation("Messages");
-                });
-
-            modelBuilder.Entity("API.Models.Entities.GroupFund", b =>
-                {
-                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("API.Models.Entities.Post", b =>

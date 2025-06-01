@@ -111,12 +111,12 @@ namespace API.Controllers
             {
                 var deleteCategoryDTO = new DeleteCategoryByIdDTO { CategoryID = id };
                 await _categoryRepository.DeleteCategoryByIdAsync(deleteCategoryDTO);
-                return NoContent();
+                return Ok(200);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error occurred while deleting category with ID {CategoryId}", id);
-                return StatusCode(500, "An error occurred while deleting the category");
+                return StatusCode(500, new { message = "An error occurred while deleting the category", error = ex.Message });
             }
         }
     }
