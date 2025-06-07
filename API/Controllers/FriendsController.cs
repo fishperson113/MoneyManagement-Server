@@ -145,5 +145,31 @@ namespace API.Controllers
                 return StatusCode(500, "Có lỗi xảy ra khi xóa bạn bè.");
             }
         }
+        [HttpGet("{friendId}/profile")]
+        public async Task<IActionResult> GetFriendProfile(string friendId)
+        {
+            try
+            {
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (userId == null)
+                    return Unauthorized();
+
+                // Check if they are actually friends
+                var isFriend = await _friendRepository.IsFriendAsync(userId, friendId);
+                if (!isFriend)
+                    return Forbid("Không thể xem thông tin của người dùng không phải bạn bè.");
+
+                var friendProfile = await _friendRepository.GetFriendProfileAsync(friendId);
+                if (friendProfile == null)
+                    return NotFound("Không tìm thấy thông tin người dùng.");
+
+                return Ok(friendProfile);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving friend profile");
+                return StatusCode(500, "Có lỗi xảy ra khi lấy thông tin người dùng.");
+            }
+        }
     }
 }

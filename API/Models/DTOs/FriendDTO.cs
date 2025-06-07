@@ -8,6 +8,7 @@
         public bool IsOnline { get; set; }
         public DateTime? LastActive { get; set; }
         public bool IsPendingRequest { get; set; }
+        public string? AvatarUrl { get; set; }
     }
 
     public class FriendRequestDTO
@@ -16,6 +17,7 @@
         public required string Username { get; set; }
         public required string DisplayName { get; set; }
         public required DateTime RequestedAt { get; set; }
+        public string? AvatarUrl { get; set; }
     }
 
     public class AddFriendDTO

@@ -380,6 +380,58 @@ namespace API.Controllers
             }
         }
 
+        /// <summary>
+        /// Gets detailed profile information for a specific group member
+        /// </summary>
+        /// <param name="groupId">The ID of the group</param>
+        /// <param name="memberId">The ID of the member</param>
+        /// <returns>The member's detailed profile information</returns>
+        /// <response code="200">Returns the member profile</response>
+        /// <response code="401">If the user is not authenticated</response>
+        /// <response code="403">If the user is not a member of the group</response>
+        /// <response code="404">If the member is not found in the group</response>
+        /// <response code="500">If there was an internal server error</response>
+        [HttpGet("{groupId}/members/{memberId}/profile")]
+        public async Task<IActionResult> GetGroupMemberProfile(Guid groupId, string memberId)
+        {
+            try
+            {
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (userId == null)
+                    return Unauthorized();
 
+                // First verify the requesting user is in the group
+                try
+                {
+                    var members = await _groupRepository.GetGroupMembersAsync(userId, groupId);
+                    var targetMember = members.FirstOrDefault(m => m.UserId == memberId);
+
+                    if (targetMember == null)
+                        return NotFound("Thành viên không tồn tại trong nhóm.");
+
+                    // Get more detailed profile info
+                    // We already have basic info in targetMember, but you might want to
+                    // add a method to fetch additional details if needed
+                    var memberProfile = new GroupMemberDTO
+                    {
+                        UserId = targetMember.UserId,
+                        DisplayName = targetMember.DisplayName,
+                        AvatarUrl = targetMember.AvatarUrl,
+                        Role = targetMember.Role,
+                    };
+
+                    return Ok(memberProfile);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return Forbid("Bạn không phải là thành viên của nhóm này.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving group member profile");
+                return StatusCode(500, "Có lỗi xảy ra khi lấy thông tin thành viên nhóm.");
+            }
+        }
     }
 }

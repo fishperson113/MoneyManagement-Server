@@ -69,7 +69,55 @@ namespace API.Repositories
                 throw;
             }
         }
+        /// <summary>
+        /// Gets profile information for a specific friend
+        /// </summary>
+        /// <param name="friendId">The ID of the friend</param>
+        /// <returns>Profile information for the friend</returns>
+        /// <example>
+        /// <code>
+        /// var friendProfile = await _friendRepository.GetFriendProfileAsync("friend-user-id");
+        /// </code>
+        /// </example>
+        public async Task<FriendDTO?> GetFriendProfileAsync(string friendId)
+        {
+            try
+            {
+                // Find the user in the database
+                var user = await _dbContext.Users
+                    .FirstOrDefaultAsync(u => u.Id == friendId);
 
+                if (user is null)
+                {
+                    _logger.LogWarning("User with ID {UserId} not found", friendId);
+                    return null;
+                }
+
+                // Create display name from user properties
+                string displayName = !string.IsNullOrEmpty(user.FirstName) && !string.IsNullOrEmpty(user.LastName)
+                    ? $"{user.FirstName} {user.LastName}"
+                    : user.UserName ?? string.Empty;
+
+                // Map the user to a FriendDTO
+                var friendProfile = new FriendDTO
+                {
+                    UserId = user.Id,
+                    Username = user.UserName ?? string.Empty,
+                    DisplayName = displayName,
+                    AvatarUrl = user.AvatarUrl,
+                    LastActive = null, // ApplicationUser doesn't have LastActive property
+                    IsOnline = false, // Set this based on your online tracking logic
+                    IsPendingRequest = false // No pending request for an existing friend
+                };
+
+                return friendProfile;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving friend profile for user {UserId}", friendId);
+                throw;
+            }
+        }
         public async Task<bool> AcceptFriendRequestAsync(string userId, string friendId)
         {
             try
