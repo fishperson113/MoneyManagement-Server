@@ -269,8 +269,7 @@ namespace API.Helpers
                 .ForMember(dest => dest.TotalFundsOut, opt => opt.MapFrom(src => src.TotalFundsOut))
                 .ForMember(dest => dest.Balance, opt => opt.MapFrom(src => src.Balance))
                 .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
-                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.UpdatedAt))
-                .ForMember(dest => dest.GroupTransactions, opt => opt.MapFrom(src => src.GroupTransactions));
+                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.UpdatedAt));
 
             CreateMap<UpdateGroupFundDTO, GroupFund>()
                 .ForMember(dest => dest.GroupFundID, opt => opt.MapFrom(src => src.GroupFundID))
