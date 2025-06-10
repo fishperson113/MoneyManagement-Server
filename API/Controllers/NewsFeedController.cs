@@ -1,5 +1,6 @@
 ﻿using API.Helpers;
 using API.Models.DTOs;
+using API.Models.Entities;
 using API.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -82,62 +83,67 @@ namespace API.Controllers
         public async Task<ActionResult<PostDTO>> CreatePost(
             [FromQuery] string content,
             IFormFile? file,
-            [FromServices] FirebaseHelper firebaseHelper)
+            [FromServices] FirebaseHelper firebaseHelper,
+            [FromQuery] string category = "general")
         {
+            if (file is null || file.Length == 0)
+            {
+                return BadRequest("No file uploaded");
+            }
+
+            // Get current user ID from claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized();
+            }
+
             try
             {
-                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userId))
+                // Determine folder based on media type
+                string folder;
+                string mediaType;
+                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+                // Images
+                if (extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
                 {
-                    return Unauthorized();
+                    mediaType = "image";
+                    folder = $"{category}/images/{userId}";
+                }
+                // Videos
+                else if (extension is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm")
+                {
+                    mediaType = "video";
+                    folder = $"{category}/videos/{userId}";
+                }
+                // Audio
+                else if (extension is ".mp3" or ".wav" or ".ogg" or ".m4a" or ".flac")
+                {
+                    mediaType = "audio";
+                    folder = $"{category}/audio/{userId}";
+                }
+                // Documents
+                else if (extension is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt")
+                {
+                    mediaType = "document";
+                    folder = $"{category}/documents/{userId}";
+                }
+                // Other files
+                else
+                {
+                    mediaType = "other";
+                    folder = $"{category}/other/{userId}";
                 }
 
-                // Initialize media properties
-                string? mediaUrl = null;
-                string? mediaType = null;
-
-                // Process media file if provided
-                if (file is not null && file.Length > 0)
-                {
-                    // Determine media type and folder
-                    var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-
-                    // Images
-                    if (extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
-                    {
-                        mediaType = "image";
-                    }
-                    // Videos
-                    else if (extension is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm")
-                    {
-                        mediaType = "video";
-                    }
-                    // Audio
-                    else if (extension is ".mp3" or ".wav" or ".ogg" or ".m4a" or ".flac")
-                    {
-                        mediaType = "audio";
-                    }
-                    // Documents
-                    else if (extension is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt")
-                    {
-                        mediaType = "document";
-                    }
-                    // Other files
-                    else
-                    {
-                        mediaType = "other";
-                    }
-
-                    // Upload to posts folder with user ID
-                    string folder = $"posts/{userId}";
-                    mediaUrl = await firebaseHelper.UploadFileAsync(folder, file);
-                }
+                // Upload file
+                var fileUrl = await firebaseHelper.UploadFileAsync(folder, file);
 
                 // Create the post DTO with the content and media info
                 var createPostDTO = new CreatePostDTO
                 {
                     Content = content,
-                    MediaFile = mediaUrl,
+                    MediaFile = fileUrl,
                     MediaType = mediaType
                 };
 

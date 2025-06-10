@@ -140,7 +140,8 @@ namespace API.Repositories
                     LikesCount = post.Likes.Count,
                     CommentsCount = post.Comments.Count,
                     IsLikedByCurrentUser = post.Likes.Any(l => l.UserId == currentUserId),
-
+                    MediaUrl = post.MediaUrl,      // Add the MediaUrl property
+                    MediaType = post.MediaType,
                     // Map comments
                     Comments = post.Comments
                         .OrderByDescending(c => c.CreatedAt)
