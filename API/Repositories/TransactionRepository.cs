@@ -4,6 +4,7 @@ using API.Models.Entities;
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using QuestPDF.Fluent;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -907,109 +908,8 @@ namespace API.Repositories
             {
                 _logger.LogError(ex, "Error generating yearly summary");
                 throw;
-            }
-        }
+            }        }        // ...existing code...
 
-
-
-        //TODO
-        public async Task<ReportInfoDTO> GenerateReportAsync(
-            DateTime startDate, DateTime endDate, string? type, string format,
-            bool includeTime = false, bool includeDayMonth = false)
-        {
-            try
-            {
-                _logger.LogInformation("Generating report for period {Start} to {End}, type: {Type}, format: {Format}",
-                    startDate, endDate, type, format);
-
-                // Get transactions for the report
-                var query = _context.Transactions
-                    .Include(t => t.Category)
-                    .Include(t => t.Wallet)
-                    .Where(t => t.TransactionDate >= startDate && t.TransactionDate <= endDate);
-
-                // Apply type filter (income/expense)
-                if (!string.IsNullOrEmpty(type))
-                {
-                    bool isExpense = type.ToLower() == "expense";
-                    query = query.Where(t => isExpense ? t.Amount < 0 : t.Amount > 0);
-                }
-
-                var transactions = await query.OrderByDescending(t => t.TransactionDate).ToListAsync();
-
-                // Generate a unique report ID
-                var reportId = new Random().Next(1000, 9999);
-                var timestamp = DateTime.UtcNow;
-
-                // In a real implementation, you would save the report data to a database or file system
-                // For this example, we'll just return the metadata
-
-                return new ReportInfoDTO
-                {
-                    ReportId = reportId,
-                    Status = "generated",
-                    DownloadUrl = $"/api/reports/{reportId}/download",
-                    Format = format.ToUpper(),
-                    GeneratedAt = timestamp
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error generating report");
-                throw;
-            }
-        }
-        //TODO
-        public async Task<(string fileName, string contentType, byte[] fileBytes)> DownloadReportAsync(int reportId)
-        {
-            try
-            {
-                _logger.LogInformation("Downloading report with ID: {ReportId}", reportId);
-
-                // In a real implementation, you would retrieve the report from a database or file system
-                // For this example, we'll generate a simple CSV file
-
-                var transactions = await _context.Transactions
-                    .Include(t => t.Category)
-                    .Include(t => t.Wallet)
-                    .OrderByDescending(t => t.TransactionDate)
-                    .Take(10)  // Just take a sample for demonstration
-                    .ToListAsync();
-
-                var report = new StringBuilder();
-
-                // Add CSV header
-                report.AppendLine("id,date,time,dayOfWeek,month,amount,type,category,description,wallet");
-
-                // Add transaction rows
-                foreach (var t in transactions)
-                {
-                    var type = t.Amount < 0 ? "expense" : "income";
-                    report.AppendLine(
-                        $"{t.TransactionID}," +
-                        $"{t.TransactionDate.ToString("yyyy-MM-dd")}," +
-                        $"{t.TransactionDate.ToString("HH:mm:ss")}," +
-                        $"{t.TransactionDate.DayOfWeek}," +
-                        $"{t.TransactionDate.ToString("MMMM")}," +
-                        $"{Math.Abs(t.Amount)}," +
-                        $"{type}," +
-                        $"{t.Category.Name}," +
-                        $"{t.Description?.Replace(',', ' ')}," +
-                        $"{t.Wallet.WalletName}");
-                }
-
-                var fileName = $"financial_report_{reportId}_{DateTime.UtcNow:yyyyMMdd}.csv";
-                var contentType = "text/csv";
-                var fileBytes = Encoding.UTF8.GetBytes(report.ToString());
-
-                return (fileName, contentType, fileBytes);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error downloading report");
-                throw;
-            }
-        }
-
+        // ...existing code...
     }
 }

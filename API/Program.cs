@@ -12,9 +12,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using QuestPDF.Infrastructure;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+
+// Initialize QuestPDF
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -102,6 +106,9 @@ builder.Services.AddScoped<GroupRepository>();
 builder.Services.AddScoped<IGroupFundRepository, GroupFundRepository>();
 builder.Services.AddScoped<GroupTransactionRepository>();
 builder.Services.AddScoped<PostRepository>();
+builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IStatisticService, StatisticService>();
+builder.Services.AddScoped<ICurrencyConverter, CurrencyConverter>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 builder.Services.AddSignalR();
 
