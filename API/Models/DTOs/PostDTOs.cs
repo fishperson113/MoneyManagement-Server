@@ -3,7 +3,8 @@
     public class CreatePostDTO
     {
         public string Content { get; set; } = null!;
-        public IFormFile? MediaFile { get; set; }
+        public string? MediaFile { get; set; }
+        public string? MediaType { get; set; }
 
     }
 

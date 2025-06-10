@@ -27,63 +27,27 @@ namespace API.Repositories
 
         public async Task<Post> CreatePostAsync(string userId, CreatePostDTO createPostDTO)
         {
-            try
+            // Find user
+            var user = await _dbContext.Users.FindAsync(userId);
+            if (user is null)
             {
-                string? mediaUrl = null;
-                string? mediaType = null;
-
-                // Handle media upload if file is provided
-                if (createPostDTO.MediaFile != null)
-                {
-                    // Determine folder based on media type
-                    string folder;
-                    var extension = Path.GetExtension(createPostDTO.MediaFile.FileName).ToLowerInvariant();
-
-                    if (extension == ".jpg" || extension == ".jpeg" || extension == ".png" || extension == ".gif")
-                    {
-                        mediaType = "image";
-                        folder = $"posts/images/{userId}";
-                    }
-                    else if (extension == ".mp4" || extension == ".mov" || extension == ".avi")
-                    {
-                        mediaType = "video";
-                        folder = $"posts/videos/{userId}";
-                    }
-                    else if (extension == ".mp3" || extension == ".wav" || extension == ".ogg")
-                    {
-                        mediaType = "audio";
-                        folder = $"posts/audio/{userId}";
-                    }
-                    else
-                    {
-                        mediaType = "file";
-                        folder = $"posts/files/{userId}";
-                    }
-
-                    // Use the existing UploadFileAsync method
-                    mediaUrl = await _firebaseHelper.UploadFileAsync(folder, createPostDTO.MediaFile);
-                }
-
-                var post = new Post
-                {
-                    PostId = Guid.NewGuid(),
-                    Content = createPostDTO.Content,
-                    AuthorId = userId,
-                    CreatedAt = DateTime.UtcNow,
-                    MediaUrl = mediaUrl,
-                    MediaType = mediaType
-                };
-
-                await _dbContext.Posts.AddAsync(post);
-                await _dbContext.SaveChangesAsync();
-
-                return post;
+                throw new KeyNotFoundException("User not found");
             }
-            catch (Exception ex)
+
+            var post = new Post
             {
-                _logger.LogError(ex, "Error creating post for user {UserId}", userId);
-                throw;
-            }
+                PostId = Guid.NewGuid(),
+                Content = createPostDTO.Content,
+                CreatedAt = DateTime.UtcNow,
+                AuthorId = userId,
+                MediaUrl = createPostDTO.MediaFile,
+                MediaType = createPostDTO.MediaType
+            };
+
+            _dbContext.Posts.Add(post);
+            await _dbContext.SaveChangesAsync();
+
+            return post;
         }
         public async Task<bool> DeletePostAsync(string userId, Guid postId)
         {

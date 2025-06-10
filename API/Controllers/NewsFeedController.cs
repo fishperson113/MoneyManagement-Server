@@ -1,4 +1,5 @@
-﻿using API.Models.DTOs;
+﻿using API.Helpers;
+using API.Models.DTOs;
 using API.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -69,8 +70,19 @@ namespace API.Controllers
             }
         }
 
+        /// <summary>
+        /// Creates a new post with optional media attachment
+        /// </summary>
+        /// <param name="content">Text content of the post</param>
+        /// <param name="file">Optional media file to attach to the post</param>
+        /// <param name="firebaseHelper">Firebase helper service for file uploads</param>
+        /// <returns>The created post with full details</returns>
         [HttpPost]
-        public async Task<ActionResult<PostDTO>> CreatePost([FromBody] CreatePostDTO createPostDTO)
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<PostDTO>> CreatePost(
+            [FromQuery] string content,
+            IFormFile? file,
+            [FromServices] FirebaseHelper firebaseHelper)
         {
             try
             {
@@ -80,6 +92,56 @@ namespace API.Controllers
                     return Unauthorized();
                 }
 
+                // Initialize media properties
+                string? mediaUrl = null;
+                string? mediaType = null;
+
+                // Process media file if provided
+                if (file is not null && file.Length > 0)
+                {
+                    // Determine media type and folder
+                    var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+                    // Images
+                    if (extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+                    {
+                        mediaType = "image";
+                    }
+                    // Videos
+                    else if (extension is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm")
+                    {
+                        mediaType = "video";
+                    }
+                    // Audio
+                    else if (extension is ".mp3" or ".wav" or ".ogg" or ".m4a" or ".flac")
+                    {
+                        mediaType = "audio";
+                    }
+                    // Documents
+                    else if (extension is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt")
+                    {
+                        mediaType = "document";
+                    }
+                    // Other files
+                    else
+                    {
+                        mediaType = "other";
+                    }
+
+                    // Upload to posts folder with user ID
+                    string folder = $"posts/{userId}";
+                    mediaUrl = await firebaseHelper.UploadFileAsync(folder, file);
+                }
+
+                // Create the post DTO with the content and media info
+                var createPostDTO = new CreatePostDTO
+                {
+                    Content = content,
+                    MediaFile = mediaUrl,
+                    MediaType = mediaType
+                };
+
+                // Create the post
                 var post = await _postRepository.CreatePostAsync(userId, createPostDTO);
                 var postDetails = await _postRepository.GetPostByIdAsync(userId, post.PostId);
 
