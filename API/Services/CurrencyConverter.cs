@@ -69,6 +69,8 @@ public class CurrencyConverter : ICurrencyConverter
                 TotalExpenses = Math.Round(cashFlow.TotalExpenses / exchangeRate, 2),
                 NetCashFlow = Math.Round(cashFlow.NetCashFlow / exchangeRate, 2)
             },
+            DailySummaryDTO dailySummary => ConvertDailySummary(dailySummary, exchangeRate),
+
 
             // Handle CategoryBreakdownDTO collection
             IEnumerable<CategoryBreakdownDTO> categoryBreakdowns => 
@@ -98,7 +100,60 @@ public class CurrencyConverter : ICurrencyConverter
             _ => ConvertAnonymousObject(data, exchangeRate)
         };
     }
+    /// <summary>
+    /// Converts a DailySummaryDTO object from VND to USD
+    /// </summary>
+    /// <param name="dailySummary">Daily summary data</param>
+    /// <param name="exchangeRate">Current exchange rate</param>
+    /// <returns>Converted daily summary data</returns>
+    private DailySummaryDTO ConvertDailySummary(DailySummaryDTO dailySummary, decimal exchangeRate)
+    {
+        try
+        {
+            _logger.LogInformation("Converting DailySummaryDTO from VND to USD");
 
+            // Create a new instance with converted monetary values
+            var convertedSummary = new DailySummaryDTO
+            {
+                Date = dailySummary.Date,
+                DayOfWeek = dailySummary.DayOfWeek,
+                Month = dailySummary.Month,
+                TotalIncome = Math.Round(dailySummary.TotalIncome / exchangeRate, 2),
+                TotalExpenses = Math.Round(dailySummary.TotalExpenses / exchangeRate, 2),
+                DailyDetails = dailySummary.DailyDetails?.Select(d => new DailyDetailDTO
+                {
+                    DayOfWeek = d.DayOfWeek,
+                    Income = Math.Round(d.Income / exchangeRate, 2),
+                    Expense = Math.Round(d.Expense / exchangeRate, 2)
+                }).ToList()
+            };
+
+            // Convert transactions if any
+            if (dailySummary.Transactions != null)
+            {
+                convertedSummary.Transactions = dailySummary.Transactions
+                    .Select(t => new TransactionDetailDTO
+                    {
+                        TransactionID = t.TransactionID,
+                        TransactionDate = t.TransactionDate,
+                        Amount = Math.Round(t.Amount / exchangeRate, 2),
+                        Type = t.Type,
+                        Category = t.Category,
+                        Description = t.Description,
+                        WalletID = t.WalletID,
+                        WalletName = t.WalletName
+                    })
+                    .ToList();
+            }
+
+            return convertedSummary;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error converting DailySummaryDTO: {Message}", ex.Message);
+            throw;
+        }
+    }
     /// <summary>
     /// Converts anonymous objects containing monetary values using reflection
     /// </summary>

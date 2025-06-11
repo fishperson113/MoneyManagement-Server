@@ -119,34 +119,36 @@ public class StatisticService : IStatisticService
     /// <summary>
     /// Generates daily summary data
     /// </summary>
-    private async Task<object> GenerateDailySummaryDataAsync(DateTime startDate, DateTime endDate, List<Transaction> transactions)
+    private async Task<DailySummaryDTO> GenerateDailySummaryDataAsync(DateTime startDate, DateTime endDate, List<Transaction> transactions)
     {
         await Task.CompletedTask;
 
-        var dailyData = transactions
-            .GroupBy(t => t.TransactionDate.Date)
-            .Select(g => new
-            {
-                Date = g.Key,
-                Income = g.Where(t => t.Type == "income").Sum(t => t.Amount),
-                Expenses = Math.Abs(g.Where(t => t.Type == "expense").Sum(t => t.Amount)),
-                TransactionCount = g.Count(),
-                NetFlow = g.Where(t => t.Type == "income").Sum(t => t.Amount) - 
-                         Math.Abs(g.Where(t => t.Type == "expense").Sum(t => t.Amount))
-            })
-            .OrderBy(x => x.Date)
+        // Filter transactions for the specific date (for daily report, we focus on startDate)
+        var dailyTransactions = transactions
+            .Where(t => t.TransactionDate.Date == startDate.Date)
             .ToList();
 
-        return new
+        var totalIncome = dailyTransactions.Where(t => t.Type == "income").Sum(t => t.Amount);
+        var totalExpenses = Math.Abs(dailyTransactions.Where(t => t.Type == "expense").Sum(t => t.Amount));
+
+        // Create daily details
+        var dailyDetail = new DailyDetailDTO
         {
-            StartDate = startDate,
-            EndDate = endDate,
-            DailyBreakdown = dailyData,
-            TotalDays = dailyData.Count,
-            TotalIncome = dailyData.Sum(d => d.Income),
-            TotalExpenses = dailyData.Sum(d => d.Expenses),
-            AverageDaily = dailyData.Count > 0 ? dailyData.Sum(d => d.NetFlow) / dailyData.Count : 0,
-            Transactions = _mapper.Map<List<TransactionDetailDTO>>(transactions)
+            DayOfWeek = startDate.DayOfWeek.ToString(),
+            Income = totalIncome,
+            Expense = totalExpenses
+        };
+
+        // Create and return a properly structured DailySummaryDTO
+        return new DailySummaryDTO
+        {
+            Date = startDate,
+            DayOfWeek = startDate.DayOfWeek.ToString(),
+            Month = startDate.ToString("MMMM"),
+            TotalIncome = totalIncome,
+            TotalExpenses = totalExpenses,
+            DailyDetails = new List<DailyDetailDTO> { dailyDetail },
+            Transactions = _mapper.Map<List<TransactionDetailDTO>>(dailyTransactions)
         };
     }
 
