@@ -356,14 +356,28 @@ namespace API.Helpers
             CreateMap<PostComment, PostCommentDTO>()
                 .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src =>
                     $"{src.Author.FirstName} {src.Author.LastName}".Trim()))
-                .ForMember(dest => dest.AuthorAvatarUrl, opt => opt.MapFrom(src => src.Author.AvatarUrl));
-
-            CreateMap<PostLike, PostLikeDTO>()
+                .ForMember(dest => dest.AuthorAvatarUrl, opt => opt.MapFrom(src => src.Author.AvatarUrl));            CreateMap<PostLike, PostLikeDTO>()
                 .ForMember(dest => dest.UserName, opt => opt.MapFrom(src =>
                     $"{src.User.FirstName} {src.User.LastName}".Trim()));
 
-        }
+            // Safe extensions: Message enhancement mappings
+            // MessageReaction mappings
+            CreateMap<MessageReaction, MessageReactionDTO>()
+                .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.User.UserName))
+                .ForMember(dest => dest.UserAvatarUrl, opt => opt.MapFrom(src => src.User.AvatarUrl));
 
+            CreateMap<CreateMessageReactionDTO, MessageReaction>()
+                .ForMember(dest => dest.ReactionId, opt => opt.Ignore())
+                .ForMember(dest => dest.UserId, opt => opt.Ignore())
+                .ForMember(dest => dest.User, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore());
+
+            // MessageMention mappings
+            CreateMap<MessageMention, MessageMentionDTO>()
+                .ForMember(dest => dest.MentionedUserName, opt => opt.MapFrom(src => src.MentionedUser.UserName))
+                .ForMember(dest => dest.MentionedUserAvatarUrl, opt => opt.MapFrom(src => src.MentionedUser.AvatarUrl))
+                .ForMember(dest => dest.MentionedByUserName, opt => opt.MapFrom(src => src.MentionedByUser.UserName));
+        }
     }
 }
 

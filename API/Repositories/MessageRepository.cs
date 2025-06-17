@@ -96,6 +96,34 @@ namespace API.Repositories
             }
         }
 
+        public async Task<Message?> GetMessageByIdAsync(Guid messageId)
+        {
+            try
+            {
+                return await _dbContext.Messages
+                    .FirstOrDefaultAsync(m => m.MessageID == messageId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting message by ID {MessageId}", messageId);
+                throw;
+            }
+        }
+
+        public async Task<ApplicationUser?> GetUserByUsernameAsync(string username)
+        {
+            try
+            {
+                return await _dbContext.Users
+                    .FirstOrDefaultAsync(u => u.UserName == username);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting user by username {Username}", username);
+                throw;
+            }
+        }
+
         public async Task<IEnumerable<MessageDTO>> GetMessagesBetweenUsersAsync(string currentUserId, string otherUserId)
         {
             try

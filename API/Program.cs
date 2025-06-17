@@ -109,6 +109,8 @@ builder.Services.AddScoped<PostRepository>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IStatisticService, StatisticService>();
 builder.Services.AddScoped<ICurrencyConverter, CurrencyConverter>();
+builder.Services.AddScoped<IGroupFundNotificationService, GroupFundNotificationService>();
+builder.Services.AddScoped<IMessageEnhancementRepository, MessageEnhancementRepository>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 builder.Services.AddSignalR();
 

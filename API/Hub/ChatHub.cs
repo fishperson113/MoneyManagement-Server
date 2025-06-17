@@ -8,24 +8,27 @@ using System.Collections.Concurrent;
 namespace API.Hub
 {
     public class ChatHub : Hub<IChatClient>
-    {
+    {        
         private readonly ILogger<ChatHub> _logger;
         private readonly MessageRepository _messageRepository;
         private readonly FriendRepository _friendRepository;
         private readonly GroupRepository _groupRepository;
+        private readonly IMessageEnhancementRepository _messageEnhancementRepository;
 
         // Track online users and their connection IDs
         private static readonly ConcurrentDictionary<string, HashSet<string>> OnlineUsers = new();
 
         public ChatHub(ILogger<ChatHub> logger, MessageRepository messageRepository,
-            FriendRepository friendRepository,GroupRepository groupRepository)
+            FriendRepository friendRepository, GroupRepository groupRepository,
+            IMessageEnhancementRepository messageEnhancementRepository)
         {
             _logger = logger;
             _messageRepository = messageRepository;
             _friendRepository = friendRepository;
             _groupRepository = groupRepository;
-        }
-
+            _messageEnhancementRepository = messageEnhancementRepository;
+        }       
+        
         // Sends a real-time message to a specific user
         // Also persists the message via repository
         // Notifies both sender and receiver
@@ -41,7 +44,17 @@ namespace API.Hub
                 }
 
                 // Use the repository to save the message
-                var message = await _messageRepository.SendMessageAsync(senderId, messageDto);
+                var message = await _messageRepository.SendMessageAsync(senderId, messageDto);                // Parse and process mentions in the message
+                var mentionedUserIds = await ParseMentionsFromContent(messageDto.Content);
+                if (mentionedUserIds.Any())
+                {
+                    // Only allow mentions of the receiver in direct messages
+                    var validMentions = mentionedUserIds.Where(id => id == receiverId).ToList();
+                    if (validMentions.Any())
+                    {
+                        await NotifyMentions(message.MessageID, messageDto.Content, "direct");
+                    }
+                }
 
                 // Check if receiver is online
                 var isReceiverOnline = OnlineUsers.ContainsKey(receiverId);
@@ -186,7 +199,9 @@ namespace API.Hub
                 _logger.LogError(ex, "Error accepting friend request");
                 throw;
             }
-        }
+
+        }        
+        
         /// <summary>
         /// Sends a message to all members of a group
         /// </summary>
@@ -203,13 +218,30 @@ namespace API.Hub
                 }
 
                 // Use repository to save the message
-                var message = await _groupRepository.SendGroupMessageAsync(senderId, messageDto);
+                var message = await _groupRepository.SendGroupMessageAsync(senderId, messageDto);                // Parse and process mentions in the group message
+                var mentionedUserIds = await ParseMentionsFromContent(messageDto.Content);
+                if (mentionedUserIds.Any())
+                {
+                    // Get group members to validate mentions
+                    var groupMembers = await _groupRepository.GetGroupMembersAsync(senderId, messageDto.GroupId);
+                    var groupMemberIds = groupMembers.Select(m => m.UserId).ToHashSet();
+                    
+                    // Only allow mentions of group members (excluding the sender)
+                    var validMentions = mentionedUserIds
+                        .Where(id => groupMemberIds.Contains(id) && id != senderId)
+                        .ToList();
+                    
+                    if (validMentions.Any())
+                    {
+                        await NotifyMentions(message.MessageId, messageDto.Content, "group", messageDto.GroupId);
+                    }
+                }
 
-                // Get all members of the group
-                var groupMembers = await _groupRepository.GetGroupMembersAsync(senderId, messageDto.GroupId);
+                // Get all members of the group for message distribution
+                var allGroupMembers = await _groupRepository.GetGroupMembersAsync(senderId, messageDto.GroupId);
 
                 // Send to all group members (including sender for consistency)
-                foreach (var member in groupMembers)
+                foreach (var member in allGroupMembers)
                 {
                     if (OnlineUsers.ContainsKey(member.UserId))
                     {
@@ -493,18 +525,262 @@ namespace API.Hub
                 }
 
                 // Notify all members in the SignalR group
-                await Clients.Group($"group_{groupId}").GroupDeleted(groupId);
-
-                _logger.LogInformation("Group {GroupId} was deleted by {UserId}",
-                    groupId, userId);
+                await Clients.Group($"group_{groupId}").GroupDeleted(groupId);                
+                _logger.LogInformation("Group {GroupId} was deleted by {UserId}",groupId, userId);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error notifying group deletion");
                 throw;
+            }        }
+
+        #region Message Enhancements - Reactions & Mentions
+
+        /// <summary>
+        /// Adds a reaction to a message and notifies all relevant users
+        /// </summary>
+        /// <param name="createReactionDto">The reaction data containing messageId, reactionType, and messageType</param>
+        public async Task ReactToMessage(CreateMessageReactionDTO createReactionDto)
+        {
+            try
+            {
+                var userId = Context.UserIdentifier;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User is not authenticated");
+                }
+
+                // Add reaction via repository
+                var reactionDto = await _messageEnhancementRepository.AddReactionAsync(createReactionDto);
+
+                // Determine notification scope based on message type
+                if (createReactionDto.MessageType.Equals("group", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Try group message
+                    var groupMessage = await _groupRepository.GetGroupMessageByIdAsync(createReactionDto.MessageId);
+                    if (groupMessage is not null)
+                    {
+                        // Notify all group members
+                        await Clients.Group($"group_{groupMessage.GroupId}").MessageReactionAdded(reactionDto);
+                    }
+                }
+                else
+                {
+                    // Direct message - get message details
+                    var message = await _messageRepository.GetMessageByIdAsync(createReactionDto.MessageId);
+                    if (message is not null)
+                    {
+                        // Notify sender and receiver
+                        if (OnlineUsers.ContainsKey(message.SenderId))
+                        {
+                            await Clients.User(message.SenderId).MessageReactionAdded(reactionDto);
+                        }
+                        if (OnlineUsers.ContainsKey(message.ReceiverId))
+                        {
+                            await Clients.User(message.ReceiverId).MessageReactionAdded(reactionDto);
+                        }
+                    }
+                }
+
+                _logger.LogInformation("Reaction '{Reaction}' added to message {MessageId} by {UserId}",
+                    createReactionDto.ReactionType, createReactionDto.MessageId, userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding reaction to message {MessageId}", createReactionDto.MessageId);
+                throw;
+            }
+        }        /// <summary>
+        /// Removes a reaction from a message and notifies all relevant users
+        /// </summary>
+        /// <param name="removeReactionDto">The reaction removal data containing messageId, reactionType, and messageType</param>
+        public async Task RemoveReactionFromMessage(RemoveMessageReactionDTO removeReactionDto)
+        {
+            try
+            {
+                var userId = Context.UserIdentifier;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User is not authenticated");
+                }
+
+                // Remove reaction via repository
+                var success = await _messageEnhancementRepository.RemoveReactionAsync(removeReactionDto);
+                
+                if (success)
+                {
+                    // Determine notification scope based on message type
+                    if (removeReactionDto.MessageType.Equals("group", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Try group message
+                        var groupMessage = await _groupRepository.GetGroupMessageByIdAsync(removeReactionDto.MessageId);
+                        if (groupMessage is not null)
+                        {
+                            // Notify all group members
+                            await Clients.Group($"group_{groupMessage.GroupId}").MessageReactionRemoved(
+                                removeReactionDto.MessageId, 
+                                removeReactionDto.ReactionType, 
+                                userId, 
+                                removeReactionDto.MessageType);
+                        }
+                    }
+                    else
+                    {
+                        // Direct message - get message details
+                        var message = await _messageRepository.GetMessageByIdAsync(removeReactionDto.MessageId);
+                        if (message is not null)
+                        {
+                            // Notify sender and receiver
+                            if (OnlineUsers.ContainsKey(message.SenderId))
+                            {
+                                await Clients.User(message.SenderId).MessageReactionRemoved(
+                                    removeReactionDto.MessageId, 
+                                    removeReactionDto.ReactionType, 
+                                    userId, 
+                                    removeReactionDto.MessageType);
+                            }
+                            if (OnlineUsers.ContainsKey(message.ReceiverId))
+                            {
+                                await Clients.User(message.ReceiverId).MessageReactionRemoved(
+                                    removeReactionDto.MessageId, 
+                                    removeReactionDto.ReactionType, 
+                                    userId, 
+                                    removeReactionDto.MessageType);
+                            }
+                        }
+                    }
+
+                    _logger.LogInformation("Reaction '{Reaction}' removed from message {MessageId} by {UserId}",
+                        removeReactionDto.ReactionType, removeReactionDto.MessageId, userId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error removing reaction from message {MessageId}", removeReactionDto.MessageId);
+                throw;
+            }
+        }        
+        /// <summary>
+        /// Processes mentions in a message and sends notifications
+        /// </summary>
+        /// <param name="messageId">The ID of the message containing mentions</param>
+        /// <param name="messageContent">The content of the message to parse for mentions</param>
+        /// <param name="messageType">The type of message (direct or group)</param>
+        /// <param name="groupId">The group ID if it's a group message</param>
+        public async Task NotifyMentions(Guid messageId, string messageContent, string messageType, Guid? groupId = null)
+        {
+            try
+            {
+                var userId = Context.UserIdentifier;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User is not authenticated");
+                }
+
+                // Create mentions using the repository which will parse the content
+                var mentions = await _messageEnhancementRepository.CreateMentionsAsync(messageId, messageContent, messageType, groupId);
+
+                // Send real-time notifications for each mention
+                foreach (var mention in mentions)
+                {
+                    if (OnlineUsers.ContainsKey(mention.MentionedUserId))
+                    {
+                        var notificationDto = new MentionNotificationDTO
+                        {
+                            MentionId = mention.MentionId,
+                            MessageId = messageId,
+                            MessageContent = messageContent,
+                            MentionedByUserId = userId,
+                            MentionedByUserName = mention.MentionedByUserName,
+                            MentionedByUserAvatarUrl = null, // Will be populated by repository if needed
+                            MessageType = messageType,
+                            GroupId = groupId,
+                            GroupName = null, // Will be populated by repository if needed
+                            CreatedAt = mention.CreatedAt
+                        };
+
+                        await Clients.User(mention.MentionedUserId).MentionReceived(notificationDto);
+                    }
+                }
+
+                _logger.LogInformation("Mentions processed for message {MessageId} by {UserId}. Mentioned users: {MentionedUsers}",
+                    messageId, userId, string.Join(", ", mentions.Select(m => m.MentionedUserId)));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing mentions for message {MessageId}", messageId);
+                throw;
+            }
+        }        
+        /// <summary>
+        /// Marks a mention as read
+        /// </summary>
+        /// <param name="mentionId">The ID of the mention</param>
+        public async Task MarkMentionAsRead(Guid mentionId)
+        {
+            try
+            {
+                var userId = Context.UserIdentifier;
+                if (string.IsNullOrEmpty(userId))
+                {
+                    throw new InvalidOperationException("User is not authenticated");
+                }
+
+                // Mark mention as read
+                var success = await _messageEnhancementRepository.MarkMentionAsReadAsync(mentionId, userId);
+                
+                if (success)
+                {
+                    // Notify the user (for multi-device sync)
+                    await Clients.User(userId).MentionRead(mentionId, userId);
+
+                    _logger.LogInformation("Mention marked as read for mention {MentionId} by {UserId}",
+                        mentionId, userId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error marking mention as read for mention {MentionId}", mentionId);
+                throw;
             }
         }
 
-    }
+        #endregion
 
+        #region Helper Methods
+
+        /// <summary>
+        /// Parses a message content for @username mentions and returns the list of mentioned user IDs
+        /// </summary>
+        /// <param name="content">The message content to parse</param>
+        /// <returns>List of user IDs that were mentioned</returns>
+        private async Task<List<string>> ParseMentionsFromContent(string content)
+        {
+            var mentionedUserIds = new List<string>();
+            
+            if (string.IsNullOrEmpty(content))
+                return mentionedUserIds;
+
+            // Simple regex to find @username patterns
+            var mentionPattern = @"@(\w+)";
+            var matches = System.Text.RegularExpressions.Regex.Matches(content, mentionPattern);
+
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                var username = match.Groups[1].Value;
+                
+                // Look up user by username to get their ID
+                // This assumes users have unique usernames stored in the database
+                var user = await _messageRepository.GetUserByUsernameAsync(username);
+                if (user is not null && !mentionedUserIds.Contains(user.Id))
+                {
+                    mentionedUserIds.Add(user.Id);
+                }
+            }
+
+            return mentionedUserIds;
+        }
+
+        #endregion
+    }
 }

@@ -144,7 +144,43 @@ namespace API.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error occurred while deleting group fund: {GroupFundID}", groupFundId);
+                _logger.LogError(ex, "Error occurred while deleting group fund: {GroupFundID}", groupFundId);                throw;
+            }
+        }
+
+        /// <summary>
+        /// Gets a single GroupFund by its ID
+        /// Safe extension method for SignalR notification support
+        /// </summary>
+        /// <param name="groupFundId">The ID of the GroupFund to retrieve</param>
+        /// <returns>The GroupFund data if found and user has access</returns>
+        public async Task<GroupFundDTO?> GetGroupFundByIdAsync(Guid groupFundId)
+        {
+            try
+            {
+                _logger.LogInformation("Fetching group fund with ID: {GroupFundID}", groupFundId);
+
+                var userId = GetCurrentUserId();
+
+                var groupFund = await _context.GroupFunds
+                    .Include(gf => gf.Group)
+                        .ThenInclude(g => g.Members)
+                    .FirstOrDefaultAsync(gf => gf.GroupFundID == groupFundId);
+
+                if (groupFund == null)
+                {
+                    _logger.LogWarning("GroupFund not found: {GroupFundID}", groupFundId);
+                    return null;
+                }
+
+                if (!groupFund.Group.Members.Any(m => m.UserId == userId))
+                    throw new UnauthorizedAccessException("You are not a member of this group");
+
+                return _mapper.Map<GroupFundDTO>(groupFund);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while fetching group fund: {GroupFundID}", groupFundId);
                 throw;
             }
         }

@@ -19,11 +19,14 @@ namespace API.Data
         public DbSet<Group> Groups { get; set; } = null!;
         public DbSet<GroupMember> GroupMembers { get; set; } = null!;
         public DbSet<GroupMessage> GroupMessages { get; set; } = null!;
-        public DbSet<GroupFund> GroupFunds { get; set; }
-        public DbSet<GroupTransaction> GroupTransactions { get; set; }
+        public DbSet<GroupFund> GroupFunds { get; set; }        public DbSet<GroupTransaction> GroupTransactions { get; set; }
         public DbSet<Post> Posts { get; set; } = null!;
         public DbSet<PostLike> PostLikes { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
+        
+        // Safe extensions: New entities for message enhancements
+        public DbSet<MessageReaction> MessageReactions { get; set; } = null!;
+        public DbSet<MessageMention> MessageMentions { get; set; } = null!;
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -226,13 +229,52 @@ namespace API.Data
                 .HasOne(pc => pc.Post)
                 .WithMany(p => p.Comments)
                 .HasForeignKey(pc => pc.PostId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<PostComment>()
+                .OnDelete(DeleteBehavior.Cascade);            modelBuilder.Entity<PostComment>()
                 .HasOne(pc => pc.Author)
                 .WithMany()
                 .HasForeignKey(pc => pc.AuthorId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Safe extensions: Configure new message enhancement entities
+            // MessageReaction relationships and constraints
+            modelBuilder.Entity<MessageReaction>()
+                .HasOne(mr => mr.User)
+                .WithMany()
+                .HasForeignKey(mr => mr.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Composite unique index: one reaction type per user per message
+            modelBuilder.Entity<MessageReaction>()
+                .HasIndex(mr => new { mr.MessageId, mr.UserId, mr.ReactionType })
+                .IsUnique()
+                .HasDatabaseName("IX_MessageReaction_MessageId_UserId_ReactionType");
+
+            // Index for efficient reaction queries
+            modelBuilder.Entity<MessageReaction>()
+                .HasIndex(mr => mr.MessageId)
+                .HasDatabaseName("IX_MessageReaction_MessageId");
+
+            // MessageMention relationships and constraints
+            modelBuilder.Entity<MessageMention>()
+                .HasOne(mm => mm.MentionedUser)
+                .WithMany()
+                .HasForeignKey(mm => mm.MentionedUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<MessageMention>()
+                .HasOne(mm => mm.MentionedByUser)
+                .WithMany()
+                .HasForeignKey(mm => mm.MentionedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Index for efficient mention queries
+            modelBuilder.Entity<MessageMention>()
+                .HasIndex(mm => mm.MessageId)
+                .HasDatabaseName("IX_MessageMention_MessageId");
+
+            modelBuilder.Entity<MessageMention>()
+                .HasIndex(mm => mm.MentionedUserId)
+                .HasDatabaseName("IX_MessageMention_MentionedUserId");
         }
     }
 }

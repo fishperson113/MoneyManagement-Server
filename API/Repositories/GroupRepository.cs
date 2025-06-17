@@ -174,6 +174,20 @@ namespace API.Repositories
             }
         }
 
+        public async Task<GroupMessage?> GetGroupMessageByIdAsync(Guid messageId)
+        {
+            try
+            {
+                return await _dbContext.GroupMessages
+                    .FirstOrDefaultAsync(m => m.MessageId == messageId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting group message by ID {MessageId}", messageId);
+                throw;
+            }
+        }
+
         public async Task<List<GroupDTO>> GetUserGroupsAsync(string userId)
         {
             try
