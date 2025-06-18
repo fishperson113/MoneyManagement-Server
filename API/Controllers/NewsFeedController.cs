@@ -86,9 +86,10 @@ namespace API.Controllers
             [FromServices] FirebaseHelper firebaseHelper,
             [FromQuery] string category = "general")
         {
-            if (file is null || file.Length == 0)
+            // Check if there is at least content (file is now optional)
+            if (string.IsNullOrWhiteSpace(content) && (file is null || file.Length == 0))
             {
-                return BadRequest("No file uploaded");
+                return BadRequest("Post must contain either text content or a media file");
             }
 
             // Get current user ID from claims
@@ -100,46 +101,52 @@ namespace API.Controllers
 
             try
             {
-                // Determine folder based on media type
-                string folder;
-                string mediaType;
-                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                string? fileUrl = null;
+                string? mediaType = null;
 
-                // Images
-                if (extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+                // Only process file if one was provided
+                if (file is not null && file.Length > 0)
                 {
-                    mediaType = "image";
-                    folder = $"{category}/images/{userId}";
-                }
-                // Videos
-                else if (extension is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm")
-                {
-                    mediaType = "video";
-                    folder = $"{category}/videos/{userId}";
-                }
-                // Audio
-                else if (extension is ".mp3" or ".wav" or ".ogg" or ".m4a" or ".flac")
-                {
-                    mediaType = "audio";
-                    folder = $"{category}/audio/{userId}";
-                }
-                // Documents
-                else if (extension is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt")
-                {
-                    mediaType = "document";
-                    folder = $"{category}/documents/{userId}";
-                }
-                // Other files
-                else
-                {
-                    mediaType = "other";
-                    folder = $"{category}/other/{userId}";
+                    // Determine folder based on media type
+                    string folder;
+                    var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+                    // Images
+                    if (extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp")
+                    {
+                        mediaType = "image";
+                        folder = $"{category}/images/{userId}";
+                    }
+                    // Videos
+                    else if (extension is ".mp4" or ".mov" or ".avi" or ".mkv" or ".webm")
+                    {
+                        mediaType = "video";
+                        folder = $"{category}/videos/{userId}";
+                    }
+                    // Audio
+                    else if (extension is ".mp3" or ".wav" or ".ogg" or ".m4a" or ".flac")
+                    {
+                        mediaType = "audio";
+                        folder = $"{category}/audio/{userId}";
+                    }
+                    // Documents
+                    else if (extension is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt")
+                    {
+                        mediaType = "document";
+                        folder = $"{category}/documents/{userId}";
+                    }
+                    // Other files
+                    else
+                    {
+                        mediaType = "other";
+                        folder = $"{category}/other/{userId}";
+                    }
+
+                    // Upload file
+                    fileUrl = await firebaseHelper.UploadFileAsync(folder, file);
                 }
 
-                // Upload file
-                var fileUrl = await firebaseHelper.UploadFileAsync(folder, file);
-
-                // Create the post DTO with the content and media info
+                // Create the post DTO with the content and optional media info
                 var createPostDTO = new CreatePostDTO
                 {
                     Content = content,
