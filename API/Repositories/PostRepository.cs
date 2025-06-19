@@ -4,6 +4,7 @@ using API.Helpers;
 using API.Models.DTOs;
 using API.Models.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace API.Repositories
 {
@@ -34,6 +35,14 @@ namespace API.Repositories
                 throw new KeyNotFoundException("User not found");
             }
 
+            // Validate group targeting if applicable
+            if (createPostDTO.TargetType == PostTargetType.Groups && 
+                createPostDTO.TargetGroupIds != null && 
+                createPostDTO.TargetGroupIds.Any())
+            {
+                await ValidateUserGroupMembership(userId, createPostDTO.TargetGroupIds);
+            }
+
             var post = new Post
             {
                 PostId = Guid.NewGuid(),
@@ -41,7 +50,11 @@ namespace API.Repositories
                 CreatedAt = DateTime.UtcNow,
                 AuthorId = userId,
                 MediaUrl = createPostDTO.MediaFile,
-                MediaType = createPostDTO.MediaType
+                MediaType = createPostDTO.MediaType,
+                TargetType = createPostDTO.TargetType,
+                TargetGroupIds = createPostDTO.TargetGroupIds != null && createPostDTO.TargetGroupIds.Any() 
+                    ? JsonSerializer.Serialize(createPostDTO.TargetGroupIds) 
+                    : null
             };
 
             _dbContext.Posts.Add(post);
@@ -99,8 +112,7 @@ namespace API.Repositories
                 _logger.LogError(ex, "Error deleting post {PostId} for user {UserId}", postId, userId);
                 throw;
             }
-        }
-        public async Task<PostDetailDTO?> GetPostByIdAsync(string currentUserId, Guid postId)
+        }        public async Task<PostDetailDTO?> GetPostByIdAsync(string currentUserId, Guid postId)
         {
             try
             {
@@ -118,14 +130,10 @@ namespace API.Repositories
                     return null;
                 }
 
-                // Check if current user can view this post (author or friend)
-                if (post.AuthorId != currentUserId)
+                // Check if current user can view this post based on targeting
+                if (!await CanUserViewPost(currentUserId, post))
                 {
-                    var isFriend = await _friendRepository.IsFriendAsync(currentUserId, post.AuthorId);
-                    if (!isFriend)
-                    {
-                        return null; // Not authorized to view this post
-                    }
+                    return null; // Not authorized to view this post
                 }
 
                 // Convert to DTO
@@ -140,8 +148,12 @@ namespace API.Repositories
                     LikesCount = post.Likes.Count,
                     CommentsCount = post.Comments.Count,
                     IsLikedByCurrentUser = post.Likes.Any(l => l.UserId == currentUserId),
-                    MediaUrl = post.MediaUrl,      // Add the MediaUrl property
+                    MediaUrl = post.MediaUrl,
                     MediaType = post.MediaType,
+                    TargetType = post.TargetType,
+                    TargetGroupIds = !string.IsNullOrEmpty(post.TargetGroupIds) 
+                        ? JsonSerializer.Deserialize<List<Guid>>(post.TargetGroupIds) 
+                        : null,
                     // Map comments
                     Comments = post.Comments
                         .OrderByDescending(c => c.CreatedAt)
@@ -173,25 +185,43 @@ namespace API.Repositories
                 _logger.LogError(ex, "Error getting post {PostId} for user {UserId}", postId, currentUserId);
                 throw;
             }
-        }
-
-        public async Task<NewsFeedDTO> GetNewsFeedAsync(string userId, int page = 1, int pageSize = 10)
+        }public async Task<NewsFeedDTO> GetNewsFeedAsync(string userId, int page = 1, int pageSize = 10)
         {
             try
             {
-                // Get all friends
+                // Get user's friend IDs
                 var friends = await _friendRepository.GetUserFriendsAsync(userId);
                 var friendIds = friends.Select(f => f.UserId).ToList();
 
-                // Include the user's own posts
-                friendIds.Add(userId);
+                // Get user's group memberships
+                var userGroupIds = await _dbContext.GroupMembers
+                    .Where(gm => gm.UserId == userId)
+                    .Select(gm => gm.GroupId)
+                    .ToListAsync();
 
-                // Get posts from all friends and the user, ordered by creation date
+                // Build the query with targeting logic
                 var query = _dbContext.Posts
                     .Include(p => p.Author)
                     .Include(p => p.Likes)
                     .Include(p => p.Comments)
-                    .Where(p => friendIds.Contains(p.AuthorId))
+                    .Where(p => 
+                        // Private posts: only author can see
+                        (p.TargetType == PostTargetType.Private && p.AuthorId == userId) ||
+                        
+                        // Friends posts: author's friends + author can see
+                        (p.TargetType == PostTargetType.Friends && 
+                         (friendIds.Contains(p.AuthorId) || p.AuthorId == userId)) ||
+                        
+                        // Global posts: author's friends + all group members where author is also a member
+                        (p.TargetType == PostTargetType.Global && 
+                         (friendIds.Contains(p.AuthorId) || p.AuthorId == userId ||
+                          (_dbContext.GroupMembers.Any(gm1 => gm1.UserId == p.AuthorId && userGroupIds.Contains(gm1.GroupId))))) ||
+                        
+                        // Group-targeted posts: only members of targeted groups can see
+                        (p.TargetType == PostTargetType.Groups && 
+                         p.TargetGroupIds != null &&
+                         userGroupIds.Any(ugId => p.TargetGroupIds.Contains(ugId.ToString())))
+                    )
                     .OrderByDescending(p => p.CreatedAt);
 
                 // Get total count
@@ -221,7 +251,13 @@ namespace API.Repositories
                     AuthorAvatarUrl = p.Author.AvatarUrl,
                     LikesCount = p.Likes.Count,
                     CommentsCount = p.Comments.Count,
-                    IsLikedByCurrentUser = p.Likes.Any(l => l.UserId == userId)
+                    IsLikedByCurrentUser = p.Likes.Any(l => l.UserId == userId),
+                    MediaUrl = p.MediaUrl,
+                    MediaType = p.MediaType,
+                    TargetType = p.TargetType,
+                    TargetGroupIds = !string.IsNullOrEmpty(p.TargetGroupIds) 
+                        ? JsonSerializer.Deserialize<List<Guid>>(p.TargetGroupIds) 
+                        : null
                 }).ToList();
 
                 return new NewsFeedDTO
@@ -382,12 +418,112 @@ namespace API.Repositories
                 _dbContext.PostComments.Remove(comment);
                 await _dbContext.SaveChangesAsync();
 
-                return true;
-            }
+                return true;            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting comment {CommentId} for user {UserId}", commentId, userId);
                 throw;
+            }
+        }
+
+        public async Task<bool> UpdatePostTargetAsync(string userId, Guid postId, UpdatePostTargetDTO updateTargetDTO)
+        {
+            try
+            {
+                var post = await _dbContext.Posts.FirstOrDefaultAsync(p => p.PostId == postId);
+                if (post == null || post.AuthorId != userId)
+                {
+                    return false; // Post not found or user is not the author
+                }
+
+                // Validate group targeting if applicable
+                if (updateTargetDTO.TargetType == PostTargetType.Groups && 
+                    updateTargetDTO.TargetGroupIds != null && 
+                    updateTargetDTO.TargetGroupIds.Any())
+                {
+                    await ValidateUserGroupMembership(userId, updateTargetDTO.TargetGroupIds);
+                }
+
+                // Update the post
+                post.TargetType = updateTargetDTO.TargetType;
+                post.TargetGroupIds = updateTargetDTO.TargetGroupIds != null && updateTargetDTO.TargetGroupIds.Any() 
+                    ? JsonSerializer.Serialize(updateTargetDTO.TargetGroupIds) 
+                    : null;
+
+                await _dbContext.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating post target for post {PostId} by user {UserId}", postId, userId);
+                throw;
+            }
+        }
+
+        private async Task ValidateUserGroupMembership(string userId, List<Guid> groupIds)
+        {
+            var userGroupIds = await _dbContext.GroupMembers
+                .Where(gm => gm.UserId == userId)
+                .Select(gm => gm.GroupId)
+                .ToListAsync();
+
+            var invalidGroupIds = groupIds.Where(gid => !userGroupIds.Contains(gid)).ToList();
+            if (invalidGroupIds.Any())
+            {
+                throw new UnauthorizedAccessException($"User is not a member of groups: {string.Join(", ", invalidGroupIds)}");
+            }
+        }
+
+        private async Task<bool> CanUserViewPost(string currentUserId, Post post)
+        {
+            switch (post.TargetType)
+            {
+                case PostTargetType.Private:
+                    return post.AuthorId == currentUserId;
+
+                case PostTargetType.Friends:
+                    if (post.AuthorId == currentUserId)
+                        return true;
+                    return await _friendRepository.IsFriendAsync(currentUserId, post.AuthorId);
+
+                case PostTargetType.Global:
+                    if (post.AuthorId == currentUserId)
+                        return true;
+                    
+                    // Check if they are friends
+                    if (await _friendRepository.IsFriendAsync(currentUserId, post.AuthorId))
+                        return true;
+                    
+                    // Check if they share any groups
+                    var currentUserGroups = await _dbContext.GroupMembers
+                        .Where(gm => gm.UserId == currentUserId)
+                        .Select(gm => gm.GroupId)
+                        .ToListAsync();
+                    
+                    var authorGroups = await _dbContext.GroupMembers
+                        .Where(gm => gm.UserId == post.AuthorId)
+                        .Select(gm => gm.GroupId)
+                        .ToListAsync();
+                    
+                    return currentUserGroups.Any(cug => authorGroups.Contains(cug));
+
+                case PostTargetType.Groups:
+                    if (string.IsNullOrEmpty(post.TargetGroupIds))
+                        return false;
+                    
+                    var targetGroupIds = JsonSerializer.Deserialize<List<Guid>>(post.TargetGroupIds);
+                    if (targetGroupIds == null || !targetGroupIds.Any())
+                        return false;
+                    
+                    var userGroupIds = await _dbContext.GroupMembers
+                        .Where(gm => gm.UserId == currentUserId)
+                        .Select(gm => gm.GroupId)
+                        .ToListAsync();
+                    
+                    return targetGroupIds.Any(tgId => userGroupIds.Contains(tgId));
+
+                default:
+                    return false;
             }
         }
     }

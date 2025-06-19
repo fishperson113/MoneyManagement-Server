@@ -5,6 +5,7 @@ using API.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace API.Controllers
 {
@@ -69,14 +70,15 @@ namespace API.Controllers
                 _logger.LogError(ex, "Error retrieving post {PostId}", postId);
                 return StatusCode(500, "An error occurred while retrieving the post");
             }
-        }
-
-        /// <summary>
-        /// Creates a new post with optional media attachment
+        }        /// <summary>
+        /// Creates a new post with optional media attachment and targeting options
         /// </summary>
         /// <param name="content">Text content of the post</param>
         /// <param name="file">Optional media file to attach to the post</param>
         /// <param name="firebaseHelper">Firebase helper service for file uploads</param>
+        /// <param name="category">Category for file organization</param>
+        /// <param name="targetType">Post visibility type (Friends, Private, Global, Groups)</param>
+        /// <param name="targetGroupIds">Comma-separated list of group IDs when targetType is Groups</param>
         /// <returns>The created post with full details</returns>
         [HttpPost]
         [Consumes("multipart/form-data")]
@@ -84,8 +86,9 @@ namespace API.Controllers
             [FromQuery] string content,
             IFormFile? file,
             [FromServices] FirebaseHelper firebaseHelper,
-            [FromQuery] string category = "general")
-        {
+            [FromQuery] string category = "general",
+            [FromQuery] PostTargetType targetType = PostTargetType.Friends,
+            [FromQuery] string? targetGroupIds = null)        {
             // Check if there is at least content (file is now optional)
             if (string.IsNullOrWhiteSpace(content) && (file is null || file.Length == 0))
             {
@@ -97,6 +100,28 @@ namespace API.Controllers
             if (string.IsNullOrEmpty(userId))
             {
                 return Unauthorized();
+            }
+
+            // Parse target group IDs if provided
+            List<Guid>? groupIds = null;
+            if (targetType == PostTargetType.Groups && !string.IsNullOrWhiteSpace(targetGroupIds))
+            {
+                try
+                {
+                    groupIds = targetGroupIds.Split(',')
+                        .Select(id => Guid.Parse(id.Trim()))
+                        .ToList();
+                }
+                catch (FormatException)
+                {
+                    return BadRequest("Invalid group ID format");
+                }
+            }
+
+            // Validate group targeting
+            if (targetType == PostTargetType.Groups && (groupIds == null || !groupIds.Any()))
+            {
+                return BadRequest("Target groups must be specified when targeting groups");
             }
 
             try
@@ -144,14 +169,14 @@ namespace API.Controllers
 
                     // Upload file
                     fileUrl = await firebaseHelper.UploadFileAsync(folder, file);
-                }
-
-                // Create the post DTO with the content and optional media info
+                }                // Create the post DTO with the content and optional media info
                 var createPostDTO = new CreatePostDTO
                 {
                     Content = content,
                     MediaFile = fileUrl,
-                    MediaType = mediaType
+                    MediaType = mediaType,
+                    TargetType = targetType,
+                    TargetGroupIds = groupIds
                 };
 
                 // Create the post
@@ -273,9 +298,7 @@ namespace API.Controllers
                 _logger.LogError(ex, "Error deleting post {PostId}", postId);
                 return StatusCode(500, "An error occurred while deleting the post");
             }
-        }
-
-        [HttpDelete("comment/{commentId}")]
+        }        [HttpDelete("comment/{commentId}")]
         public async Task<ActionResult> DeleteComment(Guid commentId)
         {
             try
@@ -298,6 +321,43 @@ namespace API.Controllers
             {
                 _logger.LogError(ex, "Error deleting comment {CommentId}", commentId);
                 return StatusCode(500, "An error occurred while deleting the comment");
+            }
+        }
+
+        [HttpPatch("{postId}/target")]
+        public async Task<ActionResult> UpdatePostTarget(Guid postId, [FromBody] UpdatePostTargetDTO updateTargetDTO)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
+
+                // Validate group targeting
+                if (updateTargetDTO.TargetType == PostTargetType.Groups && 
+                    (updateTargetDTO.TargetGroupIds == null || !updateTargetDTO.TargetGroupIds.Any()))
+                {
+                    return BadRequest("Target groups must be specified when targeting groups");
+                }
+
+                var success = await _postRepository.UpdatePostTargetAsync(userId, postId, updateTargetDTO);
+                if (!success)
+                {
+                    return NotFound("Post not found or you don't have permission to update it");
+                }
+
+                return Ok(new { success = true });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid("You are not a member of one or more of the specified groups");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating post target for post {PostId}", postId);
+                return StatusCode(500, "An error occurred while updating the post target");
             }
         }
     }

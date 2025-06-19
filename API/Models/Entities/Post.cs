@@ -15,5 +15,9 @@ namespace API.Models.Entities
 
         public string? MediaUrl { get; set; }
         public string? MediaType { get; set; }
+        
+        // New post targeting fields
+        public PostTargetType TargetType { get; set; } = PostTargetType.Friends;
+        public string? TargetGroupIds { get; set; } // JSON array of group IDs for Groups target type
     }
 }
