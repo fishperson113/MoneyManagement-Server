@@ -48,6 +48,8 @@ namespace API.Repositories
 
                 var entity = _mapper.Map<GroupTransaction>(dto);
                 entity.GroupTransactionID = Guid.NewGuid();
+                entity.CreatedByUserId = userId;
+                entity.CreatedAt = DateTime.UtcNow;
 
                 _context.GroupTransactions.Add(entity);
 

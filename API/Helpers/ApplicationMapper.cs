@@ -295,7 +295,9 @@ namespace API.Helpers
                 .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
                 .ForMember(dest => dest.GroupFund, opt => opt.Ignore())
                 .ForMember(dest => dest.UserWallet, opt => opt.Ignore())
-                .ForMember(dest => dest.UserCategory, opt => opt.Ignore());
+                .ForMember(dest => dest.UserCategory, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedByUserId, opt => opt.Ignore());
 
             CreateMap<GroupTransaction, GroupTransactionDTO>()
                 .ForMember(dest => dest.GroupTransactionID, opt => opt.MapFrom(src => src.GroupTransactionID))
@@ -305,7 +307,12 @@ namespace API.Helpers
                 .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
                 .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                 .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
-                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type));
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
+                .ForMember(dest => dest.UserWalletName, opt => opt.MapFrom(src => src.UserWallet != null ? src.UserWallet.WalletName: null))
+                .ForMember(dest => dest.UserCategoryName, opt => opt.MapFrom(src => src.UserCategory != null ? src.UserCategory.Name : null))
+                .ForMember(dest => dest.CreatedByUserId, opt => opt.MapFrom(src => src.CreatedByUserId))
+                .ForMember(dest => dest.CreatedByUserName, opt => opt.Ignore()) // Cần gán thủ công nếu muốn
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt));
 
             CreateMap<UpdateGroupTransactionDTO, GroupTransaction>()
                 .ForMember(dest => dest.GroupTransactionID, opt => opt.MapFrom(src => src.GroupTransactionID))
@@ -315,10 +322,12 @@ namespace API.Helpers
                 .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
                 .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
                 .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type))
-                .ForMember(dest => dest.GroupFundID, opt => opt.Ignore()) 
+                .ForMember(dest => dest.GroupFundID, opt => opt.Ignore())
                 .ForMember(dest => dest.GroupFund, opt => opt.Ignore())
                 .ForMember(dest => dest.UserWallet, opt => opt.Ignore())
-                .ForMember(dest => dest.UserCategory, opt => opt.Ignore());
+                .ForMember(dest => dest.UserCategory, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedByUserId, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore());
 
             // Simple self-mappings for DTOs that are created directly in the repository
             CreateMap<CategoryBreakdownDTO, CategoryBreakdownDTO>();

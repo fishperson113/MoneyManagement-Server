@@ -33,7 +33,9 @@
     public class DeleteGroupFundByIdDTO
     {
         public Guid GroupFundID { get; set; }
-    }    public class GetGroupFundByGroupIdDTO
+    }    
+    
+    public class GetGroupFundByGroupIdDTO
     {
         public Guid GroupID { get; set; }
     }
