@@ -12,5 +12,7 @@ namespace API.Models.Entities
         public string AuthorId { get; set; } = null!;
         public ApplicationUser Author { get; set; } = null!;
         public DateTime CreatedAt { get; set; }
+        public ICollection<PostCommentReply> Replies { get; set; } = new List<PostCommentReply>();
+
     }
 }

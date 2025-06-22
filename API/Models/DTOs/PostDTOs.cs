@@ -9,7 +9,8 @@ namespace API.Models.DTOs
         public string? MediaType { get; set; }
         public PostTargetType TargetType { get; set; } = PostTargetType.Friends;
         public List<Guid>? TargetGroupIds { get; set; }
-    }    public class PostDTO
+    }    
+    public class PostDTO
     {
         public Guid PostId { get; set; }
         public string Content { get; set; } = null!;
@@ -30,7 +31,8 @@ namespace API.Models.DTOs
     {
         public List<PostCommentDTO> Comments { get; set; } = new List<PostCommentDTO>();
         public List<PostLikeDTO> Likes { get; set; } = new List<PostLikeDTO>();
-    }    public class CreateCommentDTO
+    }    
+    public class CreateCommentDTO
     {
         public Guid PostId { get; set; }
         public string Content { get; set; } = null!;
@@ -50,6 +52,8 @@ namespace API.Models.DTOs
         public string AuthorId { get; set; } = null!;
         public string AuthorName { get; set; } = null!;
         public string? AuthorAvatarUrl { get; set; }
+        public List<PostCommentReplyDTO> Replies { get; set; } = new List<PostCommentReplyDTO>();
+
     }
 
     public class PostLikeDTO
@@ -65,5 +69,25 @@ namespace API.Models.DTOs
         public List<PostDTO> Posts { get; set; } = new List<PostDTO>();
         public int TotalCount { get; set; }
         public bool HasMorePosts { get; set; }
+    }
+
+    public class PostCommentReplyDTO
+    {
+        public Guid ReplyId { get; set; }
+        public string Content { get; set; } = null!;
+        public DateTime CreatedAt { get; set; }
+        public string AuthorId { get; set; } = null!;
+        public string AuthorName { get; set; } = null!;
+        public string? AuthorAvatarUrl { get; set; }
+        public Guid CommentId { get; set; }
+        public Guid? ParentReplyId { get; set; }
+        public List<PostCommentReplyDTO> Replies { get; set; } = new List<PostCommentReplyDTO>();
+    }
+
+    public class CreateCommentReplyDTO
+    {
+        public Guid CommentId { get; set; }
+        public string Content { get; set; } = null!;
+        public Guid? ParentReplyId { get; set; }
     }
 }

@@ -4,6 +4,7 @@ using API.Models.Entities;
 using API.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text.Json;
 
@@ -358,6 +359,123 @@ namespace API.Controllers
             {
                 _logger.LogError(ex, "Error updating post target for post {PostId}", postId);
                 return StatusCode(500, "An error occurred while updating the post target");
+            }
+        }
+        [HttpPost("comment/reply")]
+        public async Task<ActionResult<PostCommentReplyDTO>> AddCommentReply([FromBody] CreateCommentReplyDTO replyDTO)
+        {
+            try
+            {
+                if (replyDTO.ParentReplyId == Guid.Empty)
+                {
+                    replyDTO.ParentReplyId = null;
+                }
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
+
+                var reply = await _postRepository.AddCommentReplyAsync(userId, replyDTO);
+                if (reply == null)
+                {
+                    return NotFound("Comment not found or you don't have permission to reply to it");
+                }
+
+                // Get the comment's post ID from the repository
+                var comment = await _postRepository.GetCommentByIdAsync(replyDTO.CommentId);
+                if (comment == null)
+                {
+                    return NotFound("Comment not found");
+                }
+
+                // Get the updated post to return the formatted reply
+                var post = await _postRepository.GetPostByIdAsync(userId, comment.PostId);
+                if (post == null)
+                {
+                    return NotFound("Post not found");
+                }
+
+                var commentDto = post.Comments.FirstOrDefault(c => c.CommentId == replyDTO.CommentId);
+                PostCommentReplyDTO? replyDto = null;
+
+                if (replyDTO.ParentReplyId.HasValue)
+                {
+                    // Define the recursive function first
+                    Func<List<PostCommentReplyDTO>, Guid, PostCommentReplyDTO?> findReplyRecursive = null!;
+                    findReplyRecursive = (replies, targetReplyId) =>
+                    {
+                        foreach (var r in replies)
+                        {
+                            if (r.ReplyId == targetReplyId) return r;
+                            var found = findReplyRecursive(r.Replies, targetReplyId);
+                            if (found != null) return found;
+                        }
+                        return null;
+                    };
+
+                    // Now use the function
+                    var parentReply = findReplyRecursive(commentDto?.Replies ?? new List<PostCommentReplyDTO>(), replyDTO.ParentReplyId.Value);
+                    replyDto = parentReply?.Replies.FirstOrDefault(r => r.ReplyId == reply.ReplyId);
+                }
+                else
+                {
+                    // Direct reply to comment
+                    replyDto = commentDto?.Replies.FirstOrDefault(r => r.ReplyId == reply.ReplyId);
+                }
+
+                if (replyDto == null)
+                {
+                    var authorInfo = await _postRepository.GetUserBasicInfoAsync(userId);
+                    var authorName = authorInfo.Name ?? string.Empty;
+                    var authorAvatarUrl = authorInfo.AvatarUrl;
+
+                    replyDto = new PostCommentReplyDTO
+                    {
+                        ReplyId = reply.ReplyId,
+                        Content = reply.Content,
+                        CreatedAt = reply.CreatedAt,
+                        AuthorId = userId,
+                        AuthorName = authorName,
+                        AuthorAvatarUrl = authorAvatarUrl,
+                        CommentId = reply.CommentId,
+                        ParentReplyId = reply.ParentReplyId,
+                        Replies = new List<PostCommentReplyDTO>()
+                    };
+                }
+
+                return Ok(replyDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding reply to comment {CommentId} for user {UserId}", replyDTO.CommentId, User.FindFirstValue(ClaimTypes.NameIdentifier));
+                return StatusCode(500, "An error occurred while adding the reply");
+            }
+        }
+
+        [HttpDelete("comment/reply/{replyId}")]
+        public async Task<ActionResult> DeleteCommentReply(Guid replyId)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
+
+                var success = await _postRepository.DeleteCommentReplyAsync(userId, replyId);
+                if (!success)
+                {
+                    return NotFound("Reply not found or you don't have permission to delete it");
+                }
+
+                return Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting reply {ReplyId}", replyId);
+                return StatusCode(500, "An error occurred while deleting the reply");
             }
         }
     }

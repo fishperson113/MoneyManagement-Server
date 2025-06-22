@@ -56,10 +56,10 @@ namespace API.Helpers
                 .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             CreateMap<GetCategoryByIdDTO, Category>()
-               .ForMember(dest => dest.CategoryID, opt => opt.MapFrom(src => src.CategoryID))
-               .ForMember(dest => dest.Name, opt => opt.Ignore())
-               .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
-               .ForMember(dest => dest.Transactions, opt => opt.Ignore());
+                .ForMember(dest => dest.CategoryID, opt => opt.MapFrom(src => src.CategoryID))
+                .ForMember(dest => dest.Name, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.Transactions, opt => opt.Ignore());
 
             // Transaction Mappings
             CreateMap<TransactionDTO, Transaction>()
@@ -74,13 +74,13 @@ namespace API.Helpers
                 .ForMember(dest => dest.Wallet, opt => opt.Ignore());
 
             CreateMap<Transaction, TransactionDTO>()
-               .ForMember(dest => dest.TransactionID, opt => opt.MapFrom(src => src.TransactionID))
-               .ForMember(dest => dest.CategoryID, opt => opt.MapFrom(src => src.CategoryID))
-               .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
-               .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
-               .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
-               .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
-               .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type));
+                .ForMember(dest => dest.TransactionID, opt => opt.MapFrom(src => src.TransactionID))
+                .ForMember(dest => dest.CategoryID, opt => opt.MapFrom(src => src.CategoryID))
+                .ForMember(dest => dest.Amount, opt => opt.MapFrom(src => src.Amount))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.TransactionDate, opt => opt.MapFrom(src => src.TransactionDate))
+                .ForMember(dest => dest.WalletID, opt => opt.MapFrom(src => src.WalletID))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type));
 
             CreateMap<CreateTransactionDTO, Transaction>()
                 .ForMember(dest => dest.TransactionID, opt => opt.Ignore())
@@ -200,15 +200,15 @@ namespace API.Helpers
                 .ForMember(dest => dest.User, opt => opt.Ignore())
                 .ForMember(dest => dest.Friend, opt => opt.Ignore());
             CreateMap<Group, GroupDTO>()
-            .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
-            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
-            .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
-            .ForMember(dest => dest.ImageUrl, opt => opt.MapFrom(src => src.ImageUrl))
-            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
-            .ForMember(dest => dest.CreatorId, opt => opt.MapFrom(src => src.CreatorId))
-            .ForMember(dest => dest.CreatorName, opt => opt.Ignore()) // Set manually after mapping
-            .ForMember(dest => dest.MemberCount, opt => opt.Ignore()) // Calculate after mapping
-            .ForMember(dest => dest.Role, opt => opt.Ignore());
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+                .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Description))
+                .ForMember(dest => dest.ImageUrl, opt => opt.MapFrom(src => src.ImageUrl))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
+                .ForMember(dest => dest.CreatorId, opt => opt.MapFrom(src => src.CreatorId))
+                .ForMember(dest => dest.CreatorName, opt => opt.Ignore()) // Set manually after mapping
+                .ForMember(dest => dest.MemberCount, opt => opt.Ignore()) // Calculate after mapping
+                .ForMember(dest => dest.Role, opt => opt.Ignore());
 
             CreateMap<CreateGroupDTO, Group>()
                 .ForMember(dest => dest.GroupId, opt => opt.Ignore())
@@ -356,7 +356,8 @@ namespace API.Helpers
             CreateMap<PostComment, PostCommentDTO>()
                 .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src =>
                     $"{src.Author.FirstName} {src.Author.LastName}".Trim()))
-                .ForMember(dest => dest.AuthorAvatarUrl, opt => opt.MapFrom(src => src.Author.AvatarUrl));            CreateMap<PostLike, PostLikeDTO>()
+                .ForMember(dest => dest.AuthorAvatarUrl, opt => opt.MapFrom(src => src.Author.AvatarUrl));            
+            CreateMap<PostLike, PostLikeDTO>()
                 .ForMember(dest => dest.UserName, opt => opt.MapFrom(src =>
                     $"{src.User.FirstName} {src.User.LastName}".Trim()));
 
@@ -377,6 +378,21 @@ namespace API.Helpers
                 .ForMember(dest => dest.MentionedUserName, opt => opt.MapFrom(src => src.MentionedUser.UserName))
                 .ForMember(dest => dest.MentionedUserAvatarUrl, opt => opt.MapFrom(src => src.MentionedUser.AvatarUrl))
                 .ForMember(dest => dest.MentionedByUserName, opt => opt.MapFrom(src => src.MentionedByUser.UserName));
+
+            // Add PostCommentReply mapping
+            CreateMap<PostCommentReply, PostCommentReplyDTO>()
+                .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src =>
+                    $"{src.Author.FirstName} {src.Author.LastName}".Trim()))
+                .ForMember(dest => dest.AuthorAvatarUrl, opt => opt.MapFrom(src => src.Author.AvatarUrl));
+
+            // Add CreateCommentReplyDTO to PostCommentReply mapping
+            CreateMap<CreateCommentReplyDTO, PostCommentReply>()
+                .ForMember(dest => dest.ReplyId, opt => opt.Ignore())
+                .ForMember(dest => dest.AuthorId, opt => opt.Ignore())
+                .ForMember(dest => dest.Author, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.Replies, opt => opt.Ignore())
+                .ForMember(dest => dest.Comment, opt => opt.Ignore());
         }
     }
 }

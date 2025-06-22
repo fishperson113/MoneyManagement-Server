@@ -112,7 +112,9 @@ namespace API.Repositories
                 _logger.LogError(ex, "Error deleting post {PostId} for user {UserId}", postId, userId);
                 throw;
             }
-        }        public async Task<PostDetailDTO?> GetPostByIdAsync(string currentUserId, Guid postId)
+        }
+
+        public async Task<PostDetailDTO?> GetPostByIdAsync(string currentUserId, Guid postId)
         {
             try
             {
@@ -123,6 +125,13 @@ namespace API.Repositories
                         .ThenInclude(l => l.User)
                     .Include(p => p.Comments)
                         .ThenInclude(c => c.Author)
+                    .Include(p => p.Comments)
+                        .ThenInclude(c => c.Replies.OrderBy(r => r.CreatedAt))
+                            .ThenInclude(r => r.Author)
+                    .Include(p => p.Comments)
+                        .ThenInclude(c => c.Replies)
+                            .ThenInclude(r => r.Replies.OrderBy(nr => nr.CreatedAt))
+                                .ThenInclude(nr => nr.Author)
                     .FirstOrDefaultAsync(p => p.PostId == postId);
 
                 if (post == null)
@@ -134,6 +143,23 @@ namespace API.Repositories
                 if (!await CanUserViewPost(currentUserId, post))
                 {
                     return null; // Not authorized to view this post
+                }
+
+                // Helper function to recursively map nested replies
+                List<PostCommentReplyDTO> MapReplies(IEnumerable<PostCommentReply> replies)
+                {
+                    return replies.Select(r => new PostCommentReplyDTO
+                    {
+                        ReplyId = r.ReplyId,
+                        Content = r.Content,
+                        CreatedAt = r.CreatedAt,
+                        AuthorId = r.AuthorId,
+                        AuthorName = $"{r.Author.FirstName} {r.Author.LastName}".Trim(),
+                        AuthorAvatarUrl = r.Author.AvatarUrl,
+                        CommentId = r.CommentId,
+                        ParentReplyId = r.ParentReplyId,
+                        Replies = MapReplies(r.Replies.OrderBy(nr => nr.CreatedAt))
+                    }).ToList();
                 }
 
                 // Convert to DTO
@@ -151,8 +177,8 @@ namespace API.Repositories
                     MediaUrl = post.MediaUrl,
                     MediaType = post.MediaType,
                     TargetType = post.TargetType,
-                    TargetGroupIds = !string.IsNullOrEmpty(post.TargetGroupIds) 
-                        ? JsonSerializer.Deserialize<List<Guid>>(post.TargetGroupIds) 
+                    TargetGroupIds = !string.IsNullOrEmpty(post.TargetGroupIds)
+                        ? JsonSerializer.Deserialize<List<Guid>>(post.TargetGroupIds)
                         : null,
                     // Map comments
                     Comments = post.Comments
@@ -164,7 +190,9 @@ namespace API.Repositories
                             CreatedAt = c.CreatedAt,
                             AuthorId = c.AuthorId,
                             AuthorName = $"{c.Author.FirstName} {c.Author.LastName}".Trim(),
-                            AuthorAvatarUrl = c.Author.AvatarUrl
+                            AuthorAvatarUrl = c.Author.AvatarUrl,
+                            // Map top-level replies (only those without a parent)
+                            Replies = MapReplies(c.Replies.Where(r => !r.ParentReplyId.HasValue).OrderBy(r => r.CreatedAt))
                         })
                         .ToList(),
 
@@ -185,7 +213,8 @@ namespace API.Repositories
                 _logger.LogError(ex, "Error getting post {PostId} for user {UserId}", postId, currentUserId);
                 throw;
             }
-        }public async Task<NewsFeedDTO> GetNewsFeedAsync(string userId, int page = 1, int pageSize = 10)
+        }
+        public async Task<NewsFeedDTO> GetNewsFeedAsync(string userId, int page = 1, int pageSize = 10)
         {
             try
             {
@@ -525,6 +554,112 @@ namespace API.Repositories
                 default:
                     return false;
             }
+        }
+        public async Task<PostCommentReply?> AddCommentReplyAsync(string userId, CreateCommentReplyDTO replyDTO)
+        {
+            try
+            {
+                // Check if comment exists
+                var comment = await _dbContext.PostComments
+                    .Include(c => c.Post)
+                    .FirstOrDefaultAsync(c => c.CommentId == replyDTO.CommentId);
+
+                if (comment == null)
+                {
+                    return null;
+                }
+
+                // Check if user can view this post (author or friend)
+                if (comment.Post.AuthorId != userId)
+                {
+                    var isFriend = await _friendRepository.IsFriendAsync(userId, comment.Post.AuthorId);
+                    if (!isFriend)
+                    {
+                        return null; // Not authorized to reply to this comment
+                    }
+                }
+
+                // If replying to another reply, validate that it exists and belongs to the same comment
+                if (replyDTO.ParentReplyId.HasValue)
+                {
+                    var parentReply = await _dbContext.PostCommentReplies
+                        .FirstOrDefaultAsync(r => r.ReplyId == replyDTO.ParentReplyId.Value && r.CommentId == replyDTO.CommentId);
+
+                    if (parentReply == null)
+                    {
+                        return null; // Parent reply not found or not associated with this comment
+                    }
+                }
+
+                // Create new reply
+                var reply = new PostCommentReply
+                {
+                    ReplyId = Guid.NewGuid(),
+                    Content = replyDTO.Content,
+                    CommentId = replyDTO.CommentId,
+                    AuthorId = userId,
+                    CreatedAt = DateTime.UtcNow,
+                    ParentReplyId = replyDTO.ParentReplyId
+                };
+
+                await _dbContext.PostCommentReplies.AddAsync(reply);
+                await _dbContext.SaveChangesAsync();
+
+                return reply;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding reply to comment {CommentId} for user {UserId}", replyDTO.CommentId, userId);
+                throw;
+            }
+        }
+
+        public async Task<bool> DeleteCommentReplyAsync(string userId, Guid replyId)
+        {
+            try
+            {
+                var reply = await _dbContext.PostCommentReplies
+                    .Include(r => r.Comment)
+                        .ThenInclude(c => c.Post)
+                    .FirstOrDefaultAsync(r => r.ReplyId == replyId);
+
+                if (reply == null)
+                {
+                    return false;
+                }
+
+                // Only the reply author, comment author, or post author can delete a reply
+                if (reply.AuthorId != userId &&
+                    reply.Comment.AuthorId != userId &&
+                    reply.Comment.Post.AuthorId != userId)
+                {
+                    return false;
+                }
+
+                _dbContext.PostCommentReplies.Remove(reply);
+                await _dbContext.SaveChangesAsync();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting reply {ReplyId} for user {UserId}", replyId, userId);
+                throw;
+            }
+        }
+        public async Task<PostComment?> GetCommentByIdAsync(Guid commentId)
+        {
+            return await _dbContext.PostComments
+                .FirstOrDefaultAsync(c => c.CommentId == commentId);
+        }
+
+        public async Task<(string? Name, string? AvatarUrl)> GetUserBasicInfoAsync(string userId)
+        {
+            var user = await _dbContext.Users.FindAsync(userId);
+            if (user == null)
+                return (null, null);
+
+            return ($"{user.FirstName} {user.LastName}".Trim(), user.AvatarUrl);
         }
     }
 }

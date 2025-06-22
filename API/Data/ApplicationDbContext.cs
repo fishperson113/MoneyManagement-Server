@@ -19,11 +19,14 @@ namespace API.Data
         public DbSet<Group> Groups { get; set; } = null!;
         public DbSet<GroupMember> GroupMembers { get; set; } = null!;
         public DbSet<GroupMessage> GroupMessages { get; set; } = null!;
-        public DbSet<GroupFund> GroupFunds { get; set; }        public DbSet<GroupTransaction> GroupTransactions { get; set; }
+        public DbSet<GroupFund> GroupFunds { get; set; }        
+        public DbSet<GroupTransaction> GroupTransactions { get; set; }
         public DbSet<Post> Posts { get; set; } = null!;
         public DbSet<PostLike> PostLikes { get; set; } = null!;
         public DbSet<PostComment> PostComments { get; set; } = null!;
-        
+
+        public DbSet<PostCommentReply> PostCommentReplies { get; set; } = null!;
+
         // Safe extensions: New entities for message enhancements
         public DbSet<MessageReaction> MessageReactions { get; set; } = null!;
         public DbSet<MessageMention> MessageMentions { get; set; } = null!;
@@ -229,7 +232,9 @@ namespace API.Data
                 .HasOne(pc => pc.Post)
                 .WithMany(p => p.Comments)
                 .HasForeignKey(pc => pc.PostId)
-                .OnDelete(DeleteBehavior.Cascade);            modelBuilder.Entity<PostComment>()
+                .OnDelete(DeleteBehavior.Cascade);            
+            
+            modelBuilder.Entity<PostComment>()
                 .HasOne(pc => pc.Author)
                 .WithMany()
                 .HasForeignKey(pc => pc.AuthorId)
@@ -275,6 +280,26 @@ namespace API.Data
             modelBuilder.Entity<MessageMention>()
                 .HasIndex(mm => mm.MentionedUserId)
                 .HasDatabaseName("IX_MessageMention_MentionedUserId");
+
+            // PostCommentReply relationships
+            modelBuilder.Entity<PostCommentReply>()
+                .HasOne(pcr => pcr.Comment)
+                .WithMany(pc => pc.Replies)
+                .HasForeignKey(pcr => pcr.CommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PostCommentReply>()
+                .HasOne(pcr => pcr.Author)
+                .WithMany()
+                .HasForeignKey(pcr => pcr.AuthorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Self-referencing relationship for nested replies
+            modelBuilder.Entity<PostCommentReply>()
+                .HasOne(pcr => pcr.ParentReply)
+                .WithMany(pcr => pcr.Replies)
+                .HasForeignKey(pcr => pcr.ParentReplyId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }
