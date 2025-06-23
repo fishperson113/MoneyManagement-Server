@@ -402,6 +402,38 @@ namespace API.Helpers
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.Replies, opt => opt.Ignore())
                 .ForMember(dest => dest.Comment, opt => opt.Ignore());
+
+            // Add these mappings to your ApplicationMapper constructor
+            // GroupTransactionComment mappings
+            CreateMap<GroupTransactionComment, GroupTransactionCommentDTO>()
+                .ForMember(dest => dest.CommentId, opt => opt.MapFrom(src => src.CommentId))
+                .ForMember(dest => dest.GroupTransactionId, opt => opt.MapFrom(src => src.GroupTransactionId))
+                .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.UserId))
+                .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => $"{src.User.FirstName} {src.User.LastName}".Trim()))
+                .ForMember(dest => dest.UserAvatarUrl, opt => opt.MapFrom(src => src.User.AvatarUrl))
+                .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
+                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => src.UpdatedAt));
+
+            CreateMap<CreateGroupTransactionCommentDTO, GroupTransactionComment>()
+                .ForMember(dest => dest.CommentId, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupTransactionId, opt => opt.MapFrom(src => src.GroupTransactionId))
+                .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
+                .ForMember(dest => dest.UserId, opt => opt.Ignore())
+                .ForMember(dest => dest.User, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupTransaction, opt => opt.Ignore());
+
+            CreateMap<UpdateGroupTransactionCommentDTO, GroupTransactionComment>()
+                .ForMember(dest => dest.CommentId, opt => opt.MapFrom(src => src.CommentId))
+                .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
+                .ForMember(dest => dest.GroupTransactionId, opt => opt.Ignore())
+                .ForMember(dest => dest.UserId, opt => opt.Ignore())
+                .ForMember(dest => dest.User, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupTransaction, opt => opt.Ignore());
         }
     }
 }

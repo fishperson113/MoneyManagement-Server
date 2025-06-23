@@ -31,5 +31,7 @@ namespace API.Models.Entities
         // Track who created this transaction
         public required string CreatedByUserId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public ICollection<GroupTransactionComment> Comments { get; set; } = new List<GroupTransactionComment>();
+
     }
 }

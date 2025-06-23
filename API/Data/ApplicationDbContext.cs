@@ -30,6 +30,8 @@ namespace API.Data
         // Safe extensions: New entities for message enhancements
         public DbSet<MessageReaction> MessageReactions { get; set; } = null!;
         public DbSet<MessageMention> MessageMentions { get; set; } = null!;
+        public DbSet<GroupTransactionComment> GroupTransactionComments { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -300,6 +302,24 @@ namespace API.Data
                 .WithMany(pcr => pcr.Replies)
                 .HasForeignKey(pcr => pcr.ParentReplyId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Add these relationship configurations in the OnModelCreating method
+            modelBuilder.Entity<GroupTransactionComment>()
+                .HasOne(gtc => gtc.GroupTransaction)
+                .WithMany(gt => gt.Comments)
+                .HasForeignKey(gtc => gtc.GroupTransactionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GroupTransactionComment>()
+                .HasOne(gtc => gtc.User)
+                .WithMany()
+                .HasForeignKey(gtc => gtc.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Add an index for faster comment retrieval
+            modelBuilder.Entity<GroupTransactionComment>()
+                .HasIndex(gtc => gtc.GroupTransactionId)
+                .HasDatabaseName("IX_GroupTransactionComment_GroupTransactionId");
         }
     }
 }

@@ -111,6 +111,7 @@ builder.Services.AddScoped<IStatisticService, StatisticService>();
 builder.Services.AddScoped<ICurrencyConverter, CurrencyConverter>();
 builder.Services.AddScoped<IGroupFundNotificationService, GroupFundNotificationService>();
 builder.Services.AddScoped<IMessageEnhancementRepository, MessageEnhancementRepository>();
+builder.Services.AddScoped<GroupTransactionCommentRepository>();
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JWT"));
 builder.Services.AddSignalR();
 
