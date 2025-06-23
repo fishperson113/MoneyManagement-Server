@@ -44,7 +44,8 @@ namespace API.Hub
                 }
 
                 // Use the repository to save the message
-                var message = await _messageRepository.SendMessageAsync(senderId, messageDto);                // Parse and process mentions in the message
+                var message = await _messageRepository.SendMessageAsync(senderId, messageDto);                
+                // Parse and process mentions in the message
                 var mentionedUserIds = await ParseMentionsFromContent(messageDto.Content);
                 if (mentionedUserIds.Any())
                 {
@@ -218,7 +219,8 @@ namespace API.Hub
                 }
 
                 // Use repository to save the message
-                var message = await _groupRepository.SendGroupMessageAsync(senderId, messageDto);                // Parse and process mentions in the group message
+                var message = await _groupRepository.SendGroupMessageAsync(senderId, messageDto);                
+                // Parse and process mentions in the group message
                 var mentionedUserIds = await ParseMentionsFromContent(messageDto.Content);
                 if (mentionedUserIds.Any())
                 {
@@ -238,16 +240,18 @@ namespace API.Hub
                 }
 
                 // Get all members of the group for message distribution
-                var allGroupMembers = await _groupRepository.GetGroupMembersAsync(senderId, messageDto.GroupId);
+                //var allGroupMembers = await _groupRepository.GetGroupMembersAsync(senderId, messageDto.GroupId);
 
-                // Send to all group members (including sender for consistency)
-                foreach (var member in allGroupMembers)
-                {
-                    if (OnlineUsers.ContainsKey(member.UserId))
-                    {
-                        await Clients.User(member.UserId).ReceiveGroupMessage(message);
-                    }
-                }
+                //// Send to all group members (including sender for consistency)
+                //foreach (var member in allGroupMembers)
+                //{
+                //    if (OnlineUsers.ContainsKey(member.UserId))
+                //    {
+                //        await Clients.User(member.UserId).ReceiveGroupMessage(message);
+                //    }
+                //}
+                await Clients.Group($"group_{messageDto.GroupId}").ReceiveGroupMessage(message);
+                await Clients.Caller.ReceiveGroupMessage(message);
 
                 _logger.LogInformation("Group message sent from {SenderId} to group {GroupId}",
                     senderId, messageDto.GroupId);

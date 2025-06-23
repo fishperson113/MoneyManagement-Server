@@ -153,10 +153,10 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
         policy
-            .WithOrigins("http://143.198.208.227") // 👈 Đặt đúng origin client
+            .WithOrigins("http://143.198.208.227", "http://localhost:5000") // Add localhost
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .AllowCredentials(); // Cho phép gửi cookie/token
+            .AllowCredentials();
     });
 });
 
