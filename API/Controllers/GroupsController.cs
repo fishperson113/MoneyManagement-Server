@@ -1,4 +1,5 @@
 ﻿// API/Controllers/GroupsController.cs (new file)
+using API.Exceptions;
 using API.Models.DTOs;
 using API.Models.Entities;
 using API.Repositories;
@@ -265,9 +266,10 @@ namespace API.Controllers
                 var message = await _groupRepository.SendGroupMessageAsync(senderId, dto);
                 return Ok(message);
             }
-            catch (UnauthorizedAccessException)
+            catch (UserMutedOrBannedException ex)
             {
-                return Forbid("Bạn không phải là thành viên của nhóm này.");
+                _logger.LogWarning(ex, "User attempted to send message while muted/banned in group {GroupId}", dto.GroupId);
+                return StatusCode(403, "Bạn đã bị cấm hoặc tắt tiếng trong nhóm này.");
             }
             catch (Exception ex)
             {

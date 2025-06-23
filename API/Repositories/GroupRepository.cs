@@ -1,5 +1,6 @@
 ﻿// API/Repositories/GroupRepository.cs
 using API.Data;
+using API.Exceptions;
 using API.Models.DTOs;
 using API.Models.Entities;
 using AutoMapper;
@@ -125,6 +126,12 @@ namespace API.Repositories
         {
             try
             {
+                // Before creating the message, check if user can send messages
+                if (!await CanSendMessagesAsync(dto.GroupId, senderId))
+                {
+                    throw new UserMutedOrBannedException();
+                }
+
                 _logger.LogInformation("Sending group message from {SenderId} to group {GroupId}", senderId, dto.GroupId);
 
                 // Verify user is a member of the group
@@ -133,6 +140,15 @@ namespace API.Repositories
 
                 if (!isMember)
                     throw new UnauthorizedAccessException("User is not a member of this group");
+
+                // Verify the group exists
+                var groupExists = await _dbContext.Groups.AnyAsync(g => g.GroupId == dto.GroupId);
+                if (!groupExists)
+                    throw new KeyNotFoundException($"Group with ID {dto.GroupId} not found");
+
+                // Validate message content
+                if (string.IsNullOrWhiteSpace(dto.Content))
+                    throw new ArgumentException("Message content cannot be empty", nameof(dto.Content));
 
                 // Create message using AutoMapper
                 var message = _mapper.Map<GroupMessage>(dto);
@@ -157,20 +173,48 @@ namespace API.Repositories
                         sentAt = message.SentAt
                     });
 
-                // Load sender info
-                await _dbContext.Entry(message).Reference(m => m.Sender).LoadAsync();
+                // Get sender info directly from the database
+                var sender = await _dbContext.Users.FindAsync(senderId);
+                if (sender == null)
+                {
+                    throw new KeyNotFoundException($"User with ID {senderId} not found");
+                }
 
                 // Map to DTO with sender details
                 var messageDto = _mapper.Map<GroupMessageDTO>(message);
-                messageDto.SenderName = $"{message.Sender.FirstName} {message.Sender.LastName}";
-                messageDto.SenderAvatarUrl = message.Sender.AvatarUrl;
+                messageDto.SenderName = $"{sender.FirstName} {sender.LastName}".Trim();
+                messageDto.SenderAvatarUrl = sender.AvatarUrl;
 
                 return messageDto;
             }
+            catch (UserMutedOrBannedException)
+            {
+                _logger.LogWarning("User {UserId} attempted to send message while muted/banned in group {GroupId}",
+                    senderId, dto.GroupId);
+                throw;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _logger.LogWarning("User {UserId} is not a member of group {GroupId}", senderId, dto.GroupId);
+                throw;
+            }
+            catch (KeyNotFoundException)
+            {
+                _logger.LogWarning("Group {GroupId} or user {UserId} not found when sending message",
+                    dto.GroupId, senderId);
+                throw;
+            }
+            catch (ArgumentException)
+            {
+                _logger.LogWarning("Invalid message content from user {UserId} to group {GroupId}",
+                    senderId, dto.GroupId);
+                throw;
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error sending group message");
-                throw;
+                _logger.LogError(ex, "Error sending group message from {SenderId} to group {GroupId}",
+                    senderId, dto.GroupId);
+                throw; // Rethrow to preserve the stack trace
             }
         }
 
@@ -244,13 +288,14 @@ namespace API.Repositories
                 if (group == null)
                     throw new KeyNotFoundException($"Group with ID {groupId} not found");
 
-                // Get messages with sender info
-                var messages = await _dbContext.GroupMessages
+                var messagesQuery = _dbContext.GroupMessages
                     .Where(m => m.GroupId == groupId)
                     .Include(m => m.Sender)
                     .OrderBy(m => m.SentAt)
-                    .Take(100) // Limit to recent messages
-                    .ToListAsync();
+                    .Take(100);
+
+                var messages = await FilterDeletedMessagesAsync(messagesQuery);
+
 
                 // Map to DTOs
                 var messagesDto = _mapper.Map<List<GroupMessageDTO>>(messages);
@@ -683,6 +728,71 @@ namespace API.Repositories
                 throw;
             }
         }
+        // Add these methods to GroupRepository class
 
+        /// <summary>
+        /// Checks if a user can send messages in a group (not muted or banned)
+        /// </summary>
+        public async Task<bool> CanSendMessagesAsync(Guid groupId, string userId)
+        {
+            // Check if user is muted
+            var moderation = await _dbContext.Set<GroupMemberModeration>()
+                .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == userId);
+
+            if (moderation == null)
+                return true;
+
+            // Check if banned
+            if (moderation.IsBanned)
+                return false;
+
+            // Check if muted and mute hasn't expired
+            if (moderation.IsMuted && moderation.MutedUntil.HasValue && moderation.MutedUntil.Value > DateTime.UtcNow)
+                return false;
+
+            // If mute has expired, update the status
+            if (moderation.IsMuted && moderation.MutedUntil.HasValue && moderation.MutedUntil.Value <= DateTime.UtcNow)
+            {
+                moderation.IsMuted = false;
+                moderation.UpdatedAt = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync();
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if a message has been deleted by a moderator
+        /// </summary>
+        public async Task<bool> IsMessageDeletedAsync(Guid messageId)
+        {
+            return await _dbContext.Set<GroupMessageModeration>()
+                .AnyAsync(m => m.GroupMessageId == messageId && m.IsDeleted);
+        }
+
+        /// <summary>
+        /// Filters a query of group messages to exclude deleted messages
+        /// </summary>
+        private async Task<List<GroupMessage>> FilterDeletedMessagesAsync(IQueryable<GroupMessage> query)
+        {
+            var messages = await query.ToListAsync();
+            var messageIds = messages.Select(m => m.MessageId).ToList();
+
+            var deletedMessageIds = await _dbContext.Set<GroupMessageModeration>()
+                .Where(m => messageIds.Contains(m.GroupMessageId) && m.IsDeleted)
+                .Select(m => m.GroupMessageId)
+                .ToListAsync();
+
+            // Replace content of deleted messages
+            foreach (var message in messages)
+            {
+                if (deletedMessageIds.Contains(message.MessageId))
+                {
+                    message.Content = "[Message deleted by moderator]";
+                }
+            }
+
+            return messages;
+        }
     }
 }

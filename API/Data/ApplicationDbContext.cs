@@ -31,6 +31,9 @@ namespace API.Data
         public DbSet<MessageReaction> MessageReactions { get; set; } = null!;
         public DbSet<MessageMention> MessageMentions { get; set; } = null!;
         public DbSet<GroupTransactionComment> GroupTransactionComments { get; set; } = null!;
+        public DbSet<GroupMemberModeration> GroupMemberModerations { get; set; } = null!;
+        public DbSet<GroupMessageModeration> GroupMessageModerations { get; set; } = null!;
+        public DbSet<GroupModerationAction> GroupModerationActions { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -320,6 +323,57 @@ namespace API.Data
             modelBuilder.Entity<GroupTransactionComment>()
                 .HasIndex(gtc => gtc.GroupTransactionId)
                 .HasDatabaseName("IX_GroupTransactionComment_GroupTransactionId");
+
+            // GroupMemberModeration configuration
+            modelBuilder.Entity<GroupMemberModeration>()
+                .HasOne(gmm => gmm.GroupMember)
+                .WithMany()
+                .HasForeignKey(gmm => gmm.GroupMemberId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GroupMemberModeration>()
+                .HasOne(gmm => gmm.Moderator)
+                .WithMany()
+                .HasForeignKey(gmm => gmm.ModeratorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GroupMemberModeration>()
+                .HasIndex(gmm => new { gmm.GroupId, gmm.UserId })
+                .HasDatabaseName("IX_GroupMemberModeration_GroupId_UserId");
+
+            // GroupMessageModeration configuration
+            modelBuilder.Entity<GroupMessageModeration>()
+                .HasIndex(gmm => gmm.GroupMessageId)
+                .HasDatabaseName("IX_GroupMessageModeration_GroupMessageId")
+                .IsUnique();
+
+            modelBuilder.Entity<GroupMessageModeration>()
+                .HasOne(gmm => gmm.Moderator)
+                .WithMany()
+                .HasForeignKey(gmm => gmm.ModeratorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // GroupModerationAction configuration
+            modelBuilder.Entity<GroupModerationAction>()
+                .HasOne(gma => gma.Moderator)
+                .WithMany()
+                .HasForeignKey(gma => gma.ModeratorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GroupModerationAction>()
+                .HasOne(gma => gma.TargetUser)
+                .WithMany()
+                .HasForeignKey(gma => gma.TargetUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GroupModerationAction>()
+                .HasIndex(gma => gma.GroupId)
+                .HasDatabaseName("IX_GroupModerationAction_GroupId");
+
+            modelBuilder.Entity<GroupModerationAction>()
+                .HasIndex(gma => gma.TargetUserId)
+                .HasDatabaseName("IX_GroupModerationAction_TargetUserId");
+
         }
     }
 }

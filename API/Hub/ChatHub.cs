@@ -213,11 +213,15 @@ namespace API.Hub
             {
                 // Get the sender ID from the Context
                 var senderId = Context.UserIdentifier;
+
                 if (string.IsNullOrEmpty(senderId))
                 {
                     throw new InvalidOperationException("User is not authenticated");
                 }
-
+                if (!await _groupRepository.CanSendMessagesAsync(messageDto.GroupId, senderId))
+                {
+                    throw new UnauthorizedAccessException("You are muted or banned in this group");
+                }
                 // Use repository to save the message
                 var message = await _groupRepository.SendGroupMessageAsync(senderId, messageDto);                
                 // Parse and process mentions in the group message

@@ -434,6 +434,141 @@ namespace API.Helpers
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.GroupTransaction, opt => opt.Ignore());
+
+            // Add to ApplicationMapper constructor
+
+            // Group Moderation Mappings
+            CreateMap<GroupMemberModeration, ModerationActionDTO>()
+                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.ModeratorId, opt => opt.MapFrom(src => src.ModeratorId))
+                .ForMember(dest => dest.ModeratorName, opt => opt.MapFrom(src => $"{src.Moderator.FirstName} {src.Moderator.LastName}".Trim()))
+                .ForMember(dest => dest.TargetUserId, opt => opt.MapFrom(src => src.UserId))
+                .ForMember(dest => dest.TargetUserName, opt => opt.Ignore()) // Set manually after mapping
+                .ForMember(dest => dest.ActionType, opt => opt.Ignore()) // Set manually based on IsMuted/IsBanned
+                .ForMember(dest => dest.Reason, opt => opt.MapFrom(src => src.IsMuted ? src.MuteReason : src.BanReason))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
+                .ForMember(dest => dest.ExpiresAt, opt => opt.MapFrom(src => src.MutedUntil));
+
+            CreateMap<GroupMessageModeration, ModerationActionDTO>()
+                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.ModeratorId, opt => opt.MapFrom(src => src.ModeratorId))
+                .ForMember(dest => dest.ModeratorName, opt => opt.MapFrom(src => $"{src.Moderator.FirstName} {src.Moderator.LastName}".Trim()))
+                .ForMember(dest => dest.TargetUserId, opt => opt.Ignore()) // Set manually after mapping
+                .ForMember(dest => dest.TargetUserName, opt => opt.Ignore()) // Set manually after mapping
+                .ForMember(dest => dest.ActionType, opt => opt.MapFrom(_ => "DeleteMessage"))
+                .ForMember(dest => dest.Reason, opt => opt.MapFrom(src => src.DeletionReason))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
+                .ForMember(dest => dest.ExpiresAt, opt => opt.Ignore());
+
+            CreateMap<GroupModerationAction, ModerationActionDTO>()
+                .ForMember(dest => dest.Id, opt => opt.MapFrom(src => src.Id))
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.ModeratorId, opt => opt.MapFrom(src => src.ModeratorId))
+                .ForMember(dest => dest.ModeratorName, opt => opt.MapFrom(src => $"{src.Moderator.FirstName} {src.Moderator.LastName}".Trim()))
+                .ForMember(dest => dest.TargetUserId, opt => opt.MapFrom(src => src.TargetUserId))
+                .ForMember(dest => dest.TargetUserName, opt => opt.MapFrom(src => $"{src.TargetUser.FirstName} {src.TargetUser.LastName}".Trim()))
+                .ForMember(dest => dest.ActionType, opt => opt.MapFrom(src => src.ActionType.ToString()))
+                .ForMember(dest => dest.Reason, opt => opt.MapFrom(src => src.Reason))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt))
+                .ForMember(dest => dest.ExpiresAt, opt => opt.MapFrom(src => src.ExpiresAt));
+
+            // DTO to Entity mappings for create operations
+            CreateMap<MuteUserRequest, GroupMemberModeration>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupMemberId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.GroupMember, opt => opt.Ignore())
+                .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.TargetUserId))
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.IsMuted, opt => opt.MapFrom(_ => true))
+                .ForMember(dest => dest.IsBanned, opt => opt.MapFrom(_ => false))
+                .ForMember(dest => dest.MutedUntil, opt => opt.MapFrom(src => DateTime.UtcNow.AddMinutes(src.DurationInMinutes)))
+                .ForMember(dest => dest.MuteReason, opt => opt.MapFrom(src => src.Reason))
+                .ForMember(dest => dest.BanReason, opt => opt.Ignore())
+                .ForMember(dest => dest.ModeratorId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.Moderator, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
+
+            CreateMap<BanKickUserRequest, GroupMemberModeration>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupMemberId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.GroupMember, opt => opt.Ignore())
+                .ForMember(dest => dest.UserId, opt => opt.MapFrom(src => src.TargetUserId))
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.IsMuted, opt => opt.MapFrom(_ => false))
+                .ForMember(dest => dest.IsBanned, opt => opt.MapFrom(_ => true))
+                .ForMember(dest => dest.MutedUntil, opt => opt.Ignore())
+                .ForMember(dest => dest.MuteReason, opt => opt.Ignore())
+                .ForMember(dest => dest.BanReason, opt => opt.MapFrom(src => src.Reason))
+                .ForMember(dest => dest.ModeratorId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.Moderator, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow))
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
+
+            CreateMap<DeleteMessageRequest, GroupMessageModeration>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupMessageId, opt => opt.MapFrom(src => src.MessageId))
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.IsDeleted, opt => opt.MapFrom(_ => true))
+                .ForMember(dest => dest.DeletionReason, opt => opt.MapFrom(src => src.Reason))
+                .ForMember(dest => dest.ModeratorId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.Moderator, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow));
+
+            // Action logging
+            CreateMap<MuteUserRequest, GroupModerationAction>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.ModeratorId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.Moderator, opt => opt.Ignore())
+                .ForMember(dest => dest.TargetUserId, opt => opt.MapFrom(src => src.TargetUserId))
+                .ForMember(dest => dest.TargetUser, opt => opt.Ignore())
+                .ForMember(dest => dest.ActionType, opt => opt.MapFrom(_ => ModerationActionType.Mute))
+                .ForMember(dest => dest.Reason, opt => opt.MapFrom(src => src.Reason))
+                .ForMember(dest => dest.MessageId, opt => opt.Ignore())
+                .ForMember(dest => dest.ExpiresAt, opt => opt.MapFrom(src => DateTime.UtcNow.AddMinutes(src.DurationInMinutes)))
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow));
+
+            CreateMap<BanKickUserRequest, GroupModerationAction>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.ModeratorId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.Moderator, opt => opt.Ignore())
+                .ForMember(dest => dest.TargetUserId, opt => opt.MapFrom(src => src.TargetUserId))
+                .ForMember(dest => dest.TargetUser, opt => opt.Ignore())
+                .ForMember(dest => dest.ActionType, opt => opt.MapFrom(_ => ModerationActionType.Ban)) // Can be updated in service to Ban or Kick
+                .ForMember(dest => dest.Reason, opt => opt.MapFrom(src => src.Reason))
+                .ForMember(dest => dest.MessageId, opt => opt.Ignore())
+                .ForMember(dest => dest.ExpiresAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow));
+
+            CreateMap<DeleteMessageRequest, GroupModerationAction>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.ModeratorId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.Moderator, opt => opt.Ignore())
+                .ForMember(dest => dest.TargetUserId, opt => opt.Ignore()) // Set in service after getting message author
+                .ForMember(dest => dest.TargetUser, opt => opt.Ignore())
+                .ForMember(dest => dest.ActionType, opt => opt.MapFrom(_ => ModerationActionType.DeleteMessage))
+                .ForMember(dest => dest.Reason, opt => opt.MapFrom(src => src.Reason))
+                .ForMember(dest => dest.MessageId, opt => opt.MapFrom(src => src.MessageId))
+                .ForMember(dest => dest.ExpiresAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow));
+
+            CreateMap<GroupUserActionRequest, GroupModerationAction>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.GroupId, opt => opt.MapFrom(src => src.GroupId))
+                .ForMember(dest => dest.ModeratorId, opt => opt.Ignore()) // Set in service
+                .ForMember(dest => dest.Moderator, opt => opt.Ignore())
+                .ForMember(dest => dest.TargetUserId, opt => opt.MapFrom(src => src.TargetUserId))
+                .ForMember(dest => dest.TargetUser, opt => opt.Ignore())
+                .ForMember(dest => dest.ActionType, opt => opt.Ignore()) // Set in service (Unmute, Unban, GrantModRole, RevokeModRole)
+                .ForMember(dest => dest.Reason, opt => opt.Ignore())
+                .ForMember(dest => dest.MessageId, opt => opt.Ignore())
+                .ForMember(dest => dest.ExpiresAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow));
         }
     }
 }
