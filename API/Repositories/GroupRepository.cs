@@ -1,6 +1,7 @@
 ﻿// API/Repositories/GroupRepository.cs
 using API.Data;
 using API.Exceptions;
+using API.Helpers;
 using API.Models.DTOs;
 using API.Models.Entities;
 using AutoMapper;
@@ -794,5 +795,130 @@ namespace API.Repositories
 
             return messages;
         }
+        /// <summary>
+        /// Uploads and sets a new avatar for a group
+        /// </summary>
+        /// <param name="userId">The ID of the user making the request (must be group admin)</param>
+        /// <param name="groupId">The ID of the group to update</param>
+        /// <param name="file">The image file to upload</param>
+        /// <param name="firebaseHelper">Firebase helper for uploading files</param>
+        /// <returns>The avatar information including URL</returns>
+        public async Task<AvatarDTO> UploadGroupAvatarAsync(string userId, Guid groupId, IFormFile file, FirebaseHelper firebaseHelper)
+        {
+            if (file is null || file.Length == 0)
+            {
+                throw new ArgumentException("No file uploaded");
+            }
+
+            // Verify file is an image
+            if (!file.ContentType.StartsWith("image/"))
+            {
+                throw new ArgumentException("Only image files are allowed");
+            }
+
+            // Find group and verify permissions
+            var group = await _dbContext.Groups
+                .Include(g => g.Members)
+                .FirstOrDefaultAsync(g => g.GroupId == groupId);
+
+            if (group is null)
+                throw new KeyNotFoundException($"Group with ID {groupId} not found");
+
+            // Check if user is an admin of this group
+            var member = group.Members.FirstOrDefault(m => m.UserId == userId);
+
+            if (member is null)
+                throw new UnauthorizedAccessException("User is not a member of this group");
+
+            if (member.Role != GroupRole.Admin)
+                throw new UnauthorizedAccessException("Only group administrators can update the group avatar");
+
+            try
+            {
+                // Upload file to Firebase Storage
+                var avatarUrl = await firebaseHelper.UploadGroupAvatarAsync(groupId, file);
+
+                // Update group record in database
+                group.ImageUrl = avatarUrl;
+                await _dbContext.SaveChangesAsync();
+
+                return new AvatarDTO { AvatarUrl = avatarUrl };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading avatar for group {GroupId}", groupId);
+                throw; // Re-throw to be handled by controller
+            }
+        }
+
+        /// <summary>
+        /// Gets a group by its ID
+        /// </summary>
+        /// <param name="userId">The ID of the user making the request (must be group member)</param>
+        /// <param name="groupId">The ID of the group to retrieve</param>
+        /// <returns>The group information</returns>
+        /// <exception cref="KeyNotFoundException">Thrown when the group is not found</exception>
+        /// <exception cref="UnauthorizedAccessException">Thrown when the user is not a member of the group</exception>
+        public async Task<GroupDTO> GetGroupByIdAsync(string userId, Guid groupId)
+        {
+            var group = await _dbContext.Groups
+                .Include(g => g.Members)
+                .Include(g => g.Creator)
+                .FirstOrDefaultAsync(g => g.GroupId == groupId);
+
+            if (group is null)
+                throw new KeyNotFoundException($"Group with ID {groupId} not found");
+
+            // Check if user is a member of this group
+            var isMember = group.Members.Any(m => m.UserId == userId);
+
+            if (!isMember)
+                throw new UnauthorizedAccessException("User is not a member of this group");
+
+            // Map to DTO
+            var groupDto = _mapper.Map<GroupDTO>(group);
+
+            // Set additional properties
+            groupDto.CreatorName = $"{group.Creator.FirstName} {group.Creator.LastName}".Trim();
+            groupDto.MemberCount = group.Members.Count;
+            groupDto.Role = group.Members.FirstOrDefault(m => m.UserId == userId)?.Role ?? GroupRole.Member;
+
+            return groupDto;
+        }
+        /// <summary>
+        /// Updates a group's avatar URL
+        /// </summary>
+        /// <param name="userId">The ID of the user making the request (must be group admin)</param>
+        /// <param name="groupId">The ID of the group to update</param>
+        /// <param name="avatarUrl">The new avatar URL, or null to reset to default</param>
+        /// <returns>True if successful</returns>
+        /// <exception cref="KeyNotFoundException">Thrown when the group is not found</exception>
+        /// <exception cref="UnauthorizedAccessException">Thrown when the user is not authorized to update the group</exception>
+        public async Task<bool> UpdateGroupAvatarAsync(string userId, Guid groupId, string? avatarUrl)
+        {
+            var group = await _dbContext.Groups
+                .Include(g => g.Members)
+                .FirstOrDefaultAsync(g => g.GroupId == groupId);
+
+            if (group is null)
+                throw new KeyNotFoundException($"Group with ID {groupId} not found");
+
+            // Check if user is an admin of this group
+            var member = group.Members.FirstOrDefault(m => m.UserId == userId);
+
+            if (member is null)
+                throw new UnauthorizedAccessException("User is not a member of this group");
+
+            if (member.Role != GroupRole.Admin)
+                throw new UnauthorizedAccessException("Only group administrators can update the group avatar");
+
+            // Update the avatar URL
+            group.ImageUrl = avatarUrl;
+
+            await _dbContext.SaveChangesAsync();
+
+            return true;
+        }
+
     }
 }

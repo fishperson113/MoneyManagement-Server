@@ -1,5 +1,6 @@
 ﻿// API/Controllers/GroupsController.cs (new file)
 using API.Exceptions;
+using API.Helpers;
 using API.Models.DTOs;
 using API.Models.Entities;
 using API.Repositories;
@@ -433,6 +434,155 @@ namespace API.Controllers
             {
                 _logger.LogError(ex, "Error retrieving group member profile");
                 return StatusCode(500, "Có lỗi xảy ra khi lấy thông tin thành viên nhóm.");
+            }
+        }
+        /// <summary>
+        /// Uploads an avatar image for a group
+        /// </summary>
+        /// <param name="groupId">The ID of the group</param>
+        /// <param name="file">The image file to upload</param>
+        /// <param name="firebaseHelper">Firebase helper service for file uploads</param>
+        /// <returns>The URL of the uploaded avatar</returns>
+        [HttpPost("{groupId}/avatar")]
+        [Authorize]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadGroupAvatar(Guid groupId, IFormFile file, [FromServices] FirebaseHelper firebaseHelper)
+        {
+            if (file is null || file.Length == 0)
+            {
+                return BadRequest("No file uploaded");
+            }
+
+            // Verify file is an image
+            if (!file.ContentType.StartsWith("image/"))
+            {
+                return BadRequest("Only image files are allowed");
+            }
+
+            // Get current user ID from claims
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userId is null)
+            {
+                return Unauthorized();
+            }
+
+            try
+            {
+                var result = await _groupRepository.UploadGroupAvatarAsync(userId, groupId, file, firebaseHelper);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid("You are not authorized to update this group's avatar");
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound("Group not found");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error uploading group avatar for group {GroupId}", groupId);
+                return StatusCode(500, "Có lỗi xảy ra khi tải lên ảnh đại diện cho nhóm.");
+            }
+        }
+
+        /// <summary>
+        /// Gets the avatar for a specific group
+        /// </summary>
+        /// <param name="groupId">The ID of the group</param>
+        /// <returns>The group avatar information</returns>
+        /// <response code="200">Returns the group avatar information</response>
+        /// <response code="401">If the user is not authenticated</response>
+        /// <response code="404">If the group is not found</response>
+        /// <response code="500">If there was an internal server error</response>
+        [HttpGet("{groupId}/avatar")]
+        [Authorize]
+        public async Task<IActionResult> GetGroupAvatar(Guid groupId)
+        {
+            try
+            {
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (userId is null)
+                    return Unauthorized();
+
+                // Get group information which includes the avatar URL
+                var group = await _groupRepository.GetGroupByIdAsync(userId, groupId);
+
+                if (group is null)
+                    return NotFound("Group not found");
+
+                return Ok(new { AvatarUrl = group.ImageUrl });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid("You are not a member of this group");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving group avatar for group {GroupId}", groupId);
+                return StatusCode(500, "Có lỗi xảy ra khi lấy ảnh đại diện nhóm.");
+            }
+        }
+
+        /// <summary>
+        /// Deletes the avatar for a specific group and resets to default
+        /// </summary>
+        /// <param name="groupId">The ID of the group</param>
+        /// <returns>Success status</returns>
+        /// <response code="200">Returns success status</response>
+        /// <response code="401">If the user is not authenticated</response>
+        /// <response code="403">If the user is not an admin of the group</response>
+        /// <response code="404">If the group is not found</response>
+        /// <response code="500">If there was an internal server error</response>
+        [HttpDelete("{groupId}/avatar")]
+        [Authorize]
+        public async Task<IActionResult> DeleteGroupAvatar(Guid groupId, [FromServices] FirebaseHelper firebaseHelper)
+        {
+            try
+            {
+                var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (userId is null)
+                    return Unauthorized();
+
+                // Verify the user is an admin of the group
+                var members = await _groupRepository.GetGroupMembersAsync(userId, groupId);
+                var currentMember = members.FirstOrDefault(m => m.UserId == userId);
+
+                if (currentMember is null)
+                    return NotFound("Group not found or user is not a member");
+
+                if (currentMember.Role != GroupRole.Admin)
+                    return Forbid("Only group administrators can delete the group avatar");
+
+                // Get the current group to find the avatar URL
+                var group = await _groupRepository.GetGroupByIdAsync(userId, groupId);
+
+                if (group is null)
+                    return NotFound("Group not found");
+
+                // Delete the avatar file from Firebase if it exists
+                if (!string.IsNullOrEmpty(group.ImageUrl))
+                {
+                    await firebaseHelper.DeleteFileAsync(group.ImageUrl);
+                }
+
+                // Reset the avatar URL to null or a default value
+                await _groupRepository.UpdateGroupAvatarAsync(userId, groupId, null);
+
+                return Ok(new { Success = true });
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid("You are not authorized to delete this group's avatar");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting group avatar for group {GroupId}", groupId);
+                return StatusCode(500, "Có lỗi xảy ra khi xóa ảnh đại diện nhóm.");
             }
         }
     }

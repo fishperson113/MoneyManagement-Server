@@ -31,6 +31,12 @@ namespace API.Helpers
             // Create public URL
             return firebaseUrl;
         }
+        public async Task<string> UploadGroupAvatarAsync(Guid groupId, IFormFile file)
+        {
+            // Similar to UploadUserAvatarAsync but for groups
+            string folder = $"groups/{groupId}/images";
+            return await UploadFileAsync(folder, file);
+        }
         public async Task<string> UploadFileAsync(string folder, IFormFile file, bool generateUniqueName = true)
         {
             if (file is null || file.Length == 0)
