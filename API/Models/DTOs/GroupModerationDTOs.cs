@@ -56,3 +56,19 @@ public class ModerationActionDTO
     public DateTime CreatedAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
 }
+
+/// <summary>
+/// Response containing user's moderation status in a group
+/// </summary>
+public class UserGroupStatusDTO
+{
+    public Guid GroupId { get; set; }
+    public string UserId { get; set; } = null!;
+    public bool IsMuted { get; set; }
+    public bool IsBanned { get; set; }
+    public DateTime? MutedAt { get; set; }
+    public DateTime? MutedUntil { get; set; }
+    public string? MuteReason { get; set; }
+    public string? BanReason { get; set; }
+    public DateTime? LastModerationUpdate { get; set; }
+}

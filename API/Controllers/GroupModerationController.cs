@@ -194,4 +194,19 @@ public class GroupModerationController : ControllerBase
         var logs = await _moderationService.GetModerationLogsAsync(groupId, page, pageSize);
         return Ok(logs);
     }
+
+    /// <summary>
+    /// Gets the current user's moderation status in a group
+    /// </summary>
+    [HttpGet("status/{groupId}")]
+    public async Task<IActionResult> GetUserGroupStatus(Guid groupId)
+    {
+        var userId = GetUserId();
+        var status = await _moderationService.GetUserGroupStatusAsync(groupId, userId);
+
+        if (status == null)
+            return NotFound("User is not a member of this group.");
+
+        return Ok(status);
+    }
 }
