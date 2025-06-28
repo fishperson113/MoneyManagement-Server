@@ -81,6 +81,7 @@ namespace API.Models.DTOs
         public string? AuthorAvatarUrl { get; set; }
         public Guid CommentId { get; set; }
         public Guid? ParentReplyId { get; set; }
+        public string? ParentReplyName { get; set; }
         public List<PostCommentReplyDTO> Replies { get; set; } = new List<PostCommentReplyDTO>();
     }
 

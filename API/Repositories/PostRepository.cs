@@ -146,7 +146,7 @@ namespace API.Repositories
                 }
 
                 // Helper function to recursively map nested replies
-                List<PostCommentReplyDTO> MapReplies(IEnumerable<PostCommentReply> replies)
+                List<PostCommentReplyDTO> MapReplies(IEnumerable<PostCommentReply> replies, string commentAuthorName, Dictionary<Guid, string> replyAuthorNames)
                 {
                     return replies.Select(r => new PostCommentReplyDTO
                     {
@@ -158,7 +158,10 @@ namespace API.Repositories
                         AuthorAvatarUrl = r.Author.AvatarUrl,
                         CommentId = r.CommentId,
                         ParentReplyId = r.ParentReplyId,
-                        Replies = MapReplies(r.Replies.OrderBy(nr => nr.CreatedAt))
+                        ParentReplyName = r.ParentReplyId.HasValue 
+                            ? replyAuthorNames.GetValueOrDefault(r.ParentReplyId.Value)
+                            : commentAuthorName,
+                        Replies = MapReplies(r.Replies.OrderBy(nr => nr.CreatedAt), commentAuthorName, replyAuthorNames)
                     }).ToList();
                 }
 
@@ -183,16 +186,29 @@ namespace API.Repositories
                     // Map comments
                     Comments = post.Comments
                         .OrderByDescending(c => c.CreatedAt)
-                        .Select(c => new PostCommentDTO
+                        .Select(c => 
                         {
-                            CommentId = c.CommentId,
-                            Content = c.Content,
-                            CreatedAt = c.CreatedAt,
-                            AuthorId = c.AuthorId,
-                            AuthorName = $"{c.Author.FirstName} {c.Author.LastName}".Trim(),
-                            AuthorAvatarUrl = c.Author.AvatarUrl,
-                            // Map top-level replies (only those without a parent)
-                            Replies = MapReplies(c.Replies.Where(r => !r.ParentReplyId.HasValue).OrderBy(r => r.CreatedAt))
+                            // Create a dictionary of reply author names for this comment
+                            var replyAuthorNames = c.Replies.ToDictionary(
+                                r => r.ReplyId,
+                                r => $"{r.Author.FirstName} {r.Author.LastName}".Trim()
+                            );
+
+                            return new PostCommentDTO
+                            {
+                                CommentId = c.CommentId,
+                                Content = c.Content,
+                                CreatedAt = c.CreatedAt,
+                                AuthorId = c.AuthorId,
+                                AuthorName = $"{c.Author.FirstName} {c.Author.LastName}".Trim(),
+                                AuthorAvatarUrl = c.Author.AvatarUrl,
+                                // Map top-level replies (only those without a parent)
+                                Replies = MapReplies(
+                                    c.Replies.Where(r => !r.ParentReplyId.HasValue).OrderBy(r => r.CreatedAt),
+                                    $"{c.Author.FirstName} {c.Author.LastName}".Trim(),
+                                    replyAuthorNames
+                                )
+                            };
                         })
                         .ToList(),
 
