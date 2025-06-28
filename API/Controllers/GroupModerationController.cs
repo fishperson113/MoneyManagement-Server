@@ -209,4 +209,20 @@ public class GroupModerationController : ControllerBase
 
         return Ok(status);
     }
+
+    /// <summary>
+    /// Gets all group member moderation statuses for a group (list of UserGroupStatusDTO)
+    /// </summary>
+    [HttpGet("members/{groupId}")]
+    public async Task<IActionResult> GetAllGroupMemberStatuses(Guid groupId)
+    {
+        var userId = GetUserId();
+        // Check if user is a member of the group
+        var userStatus = await _moderationService.GetUserGroupStatusAsync(groupId, userId);
+        if (userStatus == null)
+            return NotFound("User is not a member of this group.");
+
+        var memberStatuses = await _moderationService.GetAllGroupMemberStatusesAsync(groupId);
+        return Ok(memberStatuses);
+    }
 }

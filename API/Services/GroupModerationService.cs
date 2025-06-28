@@ -24,6 +24,7 @@ public interface IGroupModerationService
     Task<bool> IsUserBannedAsync(Guid groupId, string userId);
     Task<bool> IsMessageDeletedAsync(Guid messageId);
     Task<UserGroupStatusDTO?> GetUserGroupStatusAsync(Guid groupId, string userId);
+    Task<List<UserGroupStatusDTO>> GetAllGroupMemberStatusesAsync(Guid groupId);
 }
 
 /// <summary>
@@ -515,5 +516,66 @@ public class GroupModerationService : IGroupModerationService
             BanReason = banReason,
             LastModerationUpdate = lastModerationUpdate
         };
+    }
+
+    /// <summary>
+    /// Gets all group member statuses
+    /// </summary>
+    public async Task<List<UserGroupStatusDTO>> GetAllGroupMemberStatusesAsync(Guid groupId)
+    {
+        var members = await _context.GroupMembers
+            .Where(m => m.GroupId == groupId)
+            .ToListAsync();
+
+        var moderations = await _context.Set<GroupMemberModeration>()
+            .Where(m => m.GroupId == groupId)
+            .ToDictionaryAsync(m => m.UserId, m => m);
+
+        var result = new List<UserGroupStatusDTO>();
+
+        foreach (var member in members)
+        {
+            var moderation = moderations.GetValueOrDefault(member.UserId);
+            var isMuted = false;
+            var mutedAt = (DateTime?)null;
+            var mutedUntil = (DateTime?)null;
+            var muteReason = (string?)null;
+
+            if (moderation?.IsMuted == true)
+            {
+                if (moderation.MutedUntil.HasValue && moderation.MutedUntil.Value < DateTime.UtcNow)
+                {
+                    moderation.IsMuted = false;
+                    moderation.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    isMuted = true;
+                    mutedAt = moderation.CreatedAt;
+                    mutedUntil = moderation.MutedUntil;
+                    muteReason = moderation.MuteReason;
+                }
+            }
+
+            var isBanned = moderation?.IsBanned ?? false;
+            var banReason = moderation?.BanReason;
+            var lastModerationUpdate = moderation?.UpdatedAt;
+
+            result.Add(new UserGroupStatusDTO
+            {
+                GroupId = groupId,
+                UserId = member.UserId,
+                IsMuted = isMuted,
+                IsBanned = isBanned,
+                MutedAt = mutedAt,
+                MutedUntil = mutedUntil,
+                MuteReason = muteReason,
+                BanReason = banReason,
+                LastModerationUpdate = lastModerationUpdate
+            });
+        }
+
+        await _context.SaveChangesAsync();
+        return result;
     }
 }
