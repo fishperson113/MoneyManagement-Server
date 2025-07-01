@@ -255,7 +255,7 @@ namespace API.Hub
                 //    }
                 //}
                 await Clients.Group($"group_{messageDto.GroupId}").ReceiveGroupMessage(message);
-                await Clients.Caller.ReceiveGroupMessage(message);
+                //await Clients.Caller.ReceiveGroupMessage(message);
 
                 _logger.LogInformation("Group message sent from {SenderId} to group {GroupId}",
                     senderId, messageDto.GroupId);
