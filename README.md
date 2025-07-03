@@ -12,7 +12,7 @@ This is a comprehensive ASP.NET Core financial management application with socia
 
 2. **Navigate to the root folder of this project (where docker-compose.yml is located):**
    ```powershell
-   cd path\to\MoneyManagement-Server
+   cd API
    ```
 
 3. **Set up environment variables:**
