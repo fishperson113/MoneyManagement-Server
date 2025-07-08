@@ -129,11 +129,25 @@ namespace API.Repositories
                 var userId = GetCurrentUserId();
                 var wallets = await _context.Wallets
                     .Where(w => w.UserId == userId)
+                    .Include(w => w.Transactions)
                     .ToListAsync();
+                var walletDtos = _mapper.Map<IEnumerable<WalletDTO>>(wallets).ToList();
 
                 _logger.LogInformation("Successfully retrieved {Count} wallets for user {UserId}.", wallets.Count, userId);
 
-                return _mapper.Map<IEnumerable<WalletDTO>>(wallets);
+                foreach (var wallet in wallets)
+                {
+                    var walletDto = walletDtos.First(dto => dto.WalletID == wallet.WalletID);
+
+                    if (wallet.Transactions != null && wallet.Transactions.Any())
+                    {
+                        decimal transactionsSum = wallet.Transactions.Sum(t =>
+                            t.Type.Equals("Income", StringComparison.OrdinalIgnoreCase) ? t.Amount : -t.Amount);
+
+                        walletDto.Balance = wallet.Balance + transactionsSum;
+                    }
+                }
+                return walletDtos;
             }
             catch (Exception ex)
             {
@@ -150,6 +164,7 @@ namespace API.Repositories
             {
                 var userId = GetCurrentUserId();
                 var wallet = await _context.Wallets
+                    .Include(w => w.Transactions)
                     .FirstOrDefaultAsync(w => w.WalletID == walletId && w.UserId == userId);
 
                 if (wallet == null)
@@ -157,9 +172,18 @@ namespace API.Repositories
                     _logger.LogWarning("Wallet with ID {WalletID} not found or doesn't belong to the current user.", walletId);
                     return null;
                 }
+                var walletDto = _mapper.Map<WalletDTO>(wallet);
 
                 _logger.LogInformation("Successfully retrieved wallet with ID: {WalletID}", walletId);
-                return _mapper.Map<WalletDTO>(wallet);
+
+                if (wallet.Transactions != null && wallet.Transactions.Any())
+                {
+                    decimal transactionsSum = wallet.Transactions.Sum(t =>
+                        t.Type.Equals("Income", StringComparison.OrdinalIgnoreCase) ? t.Amount : -t.Amount);
+
+                    walletDto.Balance = wallet.Balance + transactionsSum;
+                }
+                return walletDto;
             }
             catch (Exception ex)
             {
