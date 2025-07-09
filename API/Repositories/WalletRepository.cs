@@ -70,10 +70,15 @@ namespace API.Repositories
                     throw new KeyNotFoundException($"Wallet with ID {model.WalletID} not found or access denied.");
                 }
 
-                // Store the original userId to preserve it
+                // Store the original userId and current balance to preserve them
                 var originalUserId = wallet.UserId;
+                var currentBalance = wallet.Balance;
 
-                _mapper.Map(model, wallet);
+                // Apply only name change from the model
+                wallet.WalletName = model.WalletName;
+
+                // Update balance by adding the increase/decrease amount
+                wallet.Balance += model.Balance;
 
                 // Don't allow changing the owner
                 wallet.UserId = originalUserId;
@@ -81,7 +86,9 @@ namespace API.Repositories
                 _context.Wallets.Update(wallet);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Wallet with ID {WalletID} updated successfully", wallet.WalletID);
+                _logger.LogInformation("Wallet with ID {WalletID} updated successfully. Balance changed by {BalanceChange}",
+                    wallet.WalletID, model.Balance);
+
                 return _mapper.Map<WalletDTO>(wallet);
             }
             catch (Exception ex)
